@@ -51,9 +51,6 @@ int parse_args(arg_list *al, int argc, char *argv[]) {
     if (!argc || !argv) {
         return 0;
     }
-    // skip program name
-    argv++;
-    argc--;
     for (int i = 0; i < argc; i++) {
         if (argv[i][0] == '-') {
             arg *ag = arg_list_search(al, argv[i]);
