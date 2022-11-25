@@ -1,58 +1,135 @@
-#include <stdio.h>
+#include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/error.h>
+#include <libavutil/imgutils.h>
+#include <libswscale/swscale.h>
+#include <ncurses.h>
+#include <stdio.h>
+#include <unistd.h>
 
+#include "av.h"
 #include "config.h"
 
 void print_help();
-void print_averror(int code);
+
+// TODO: Add log module
+// TODO: modulize some functions
 
 int main(int argc, char *argv[]) {
+    // Insucfficient program arguments.
     if (argc < 2) {
         print_help();
         return -1;
     }
+    // Parse program arguments into config.
     config conf = parse_config(argc, argv);
     if (conf.help) {
         print_help();
         return 0;
     }
 
-    // create and allocate AVFormatContext to store avformat info
-    AVFormatContext *fmt_ctxt = avformat_alloc_context();
-    if (!fmt_ctxt) {
-        printf("Error allocating av format context\n");
-        return -2;
+    initscr();
+    getmaxyx(stdscr, conf.height, conf.width);
+    // To avoid split line.
+    conf.width--;
+
+    // Initialize libavformat and register all the muxers, demuxers and
+    // protocols.
+    av_register_all();
+    avcodec_register_all();
+
+    // Create Audio and Video Fromat Context.
+    AVFormatContext *fmt_ctxt = NULL;
+    // Create Audio and Video CoDec Context.
+    AVCodecContext *a_cdc = NULL, *v_cdc = NULL;
+    // Store stream index.
+    int a_idx = -1, v_idx = -1;
+
+    // Find audio and video codec centext and stream index.
+    int err =
+        find_codec_context(&conf, &fmt_ctxt, &a_cdc, &v_cdc, &a_idx, &v_idx);
+    if (err != 0) {
+        return err;
     }
 
-    // try to open file
-    int err_code = avformat_open_input(&fmt_ctxt, conf.filename, NULL, NULL);
-    if (err_code != 0) {
-        print_averror(err_code);
+    // Allocate AVPacket and AVFrame.
+    AVPacket *pckt = av_packet_alloc();
+    if (!pckt) {
+        printf("Unable to allocate AVPacket\n");
         return -2;
     }
-
-    // get stream info from file
-    err_code = avformat_find_stream_info(fmt_ctxt, NULL);
-    if (err_code < 0) {
-        print_averror(err_code);
+    AVFrame *frame = av_frame_alloc();
+    if (!frame) {
+        printf("Unable to allocate AVFrame\n");
         return -2;
     }
+    AVFrame *frame_grey = av_frame_alloc();
+    if (!frame_grey) {
+        printf("Unable to allocate AVFrame for greyscale frame\n");
+        return -2;
+    }
+    frame_grey->width = conf.width;
+    frame_grey->height = conf.height;
+    frame_grey->data[0] = (uint8_t *)av_malloc(
+        av_image_get_buffer_size(AV_PIX_FMT_GRAY8, conf.width, conf.height, 1));
+    av_image_fill_arrays(frame_grey->data, frame_grey->linesize,
+                         frame_grey->data[0], AV_PIX_FMT_GRAY8, conf.width,
+                         conf.height, 1);
 
-    
+    struct SwsContext *sws_ctxt = sws_getContext(
+        v_cdc->width, v_cdc->height, v_cdc->pix_fmt, frame_grey->width,
+        frame_grey->height, AV_PIX_FMT_GRAY8, SWS_BILINEAR, 0, 0, 0);
 
+    // While not the end of file.
+    while (av_read_frame(fmt_ctxt, pckt) >= 0) {
+        // If is video stream.
+        if (pckt->stream_index == v_idx) {
+            err = avcodec_send_packet(v_cdc, pckt);
+            if (err < 0) {
+                printf(
+                    "Error when supplying raw packet data as input to a "
+                    "decoder.(code: %d)\n",
+                    err);
+                return -10;
+            }
+            while (1) {
+                err = avcodec_receive_frame(v_cdc, frame);
+                if (err != 0) {
+                    if (err == AVERROR(EAGAIN) || err == AVERROR_EOF) {
+                        break;
+                    }
+                    printf("Failed when decoding video(code: %d)\n", err);
+                    return -5;
+                }
+                sws_scale(sws_ctxt, (const uint8_t *const *)frame->data,
+                          frame->linesize, 0, v_cdc->height, frame_grey->data,
+                          frame_grey->linesize);
+                clear();
+                for (int i = 0; i < frame_grey->height; i++) {
+                    for (int j = 0; j < frame_grey->linesize[0]; j++) {
+                        int g = frame_grey
+                                    ->data[0][i * frame_grey->linesize[0] + j];
+                        if (g > 128) {
+                            addch('.');
+                        } else {
+                            addch('#');
+                        }
+                    }
+                    addch('\n');
+                }
+                refresh();
+                usleep(15000);
+            }
+        } else if (pckt->stream_index == a_idx) {
+        }
+        av_packet_unref(pckt);
+    }
+
+    av_frame_free(&frame);
+    av_packet_free(&pckt);
+    avcodec_free_context(&a_cdc);
+    avcodec_free_context(&v_cdc);
     avformat_free_context(fmt_ctxt);
-}
-
-void print_averror(int code) {
-    char err[64];
-    int result = av_strerror(code, err, 63);
-    err[63] = '\0';
-    if (result < 0) {
-        printf("Unknown av error(code: 0x%X)\n", code);
-        return;
-    }
-    printf("%s(code: 0x%X)\n", code);
 }
 
 void print_help() {
@@ -64,10 +141,11 @@ void print_help() {
         "\n"
         "       --help -h            Print this help page\n"
         "       --cache -c <file>    Process video into a cached file\n"
-        "                            example: $ asciiplayer video.mp4 --cache cached.apc\n"
+        "                            example: $ asciiplayer video.mp4 --cache "
+        "cached.apc\n"
         "       --no-audio -n        Play video without playing audio\n"
-        "       --fps -f <fps>       Play in <fps> frames per second."
-        "                            Note: Please use a number that is a factor of file fps."
-        "\n"
-        );
+        "       --fps -f <fps>       Play in <fps> frames per second.\n"
+        "                            Note: Please use a number that is a "
+        "factor of file fps.\n"
+        "\n");
 }
