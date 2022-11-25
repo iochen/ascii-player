@@ -1,6 +1,7 @@
+#include "config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
-#include "config.h"
 
 config default_config() {
     config conf;

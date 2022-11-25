@@ -1,5 +1,6 @@
-#include <string.h>
 #include "parse.h"
+
+#include <string.h>
 
 int parse_bool(char *value) {
     int value_len = strlen(value);
@@ -52,14 +53,14 @@ int parse_bool(char *value) {
 
 int parse_int(char *value, int *succ) {
     int i = 0, n = 0;
-	for (; *(value + i) != '\0'; i++) {
-		if (*(value + i) >= '0' && *(value + i) <= '9')
-			n = n * 10 + *(value + i) - '0';
-		else { 
-			*succ = 0;
-			return 0; 
+    for (; *(value + i) != '\0'; i++) {
+        if (*(value + i) >= '0' && *(value + i) <= '9')
+            n = n * 10 + *(value + i) - '0';
+        else {
+            *succ = 0;
+            return 0;
         }
-	}
-	*succ = 1;
-	return n;
+    }
+    *succ = 1;
+    return n;
 }

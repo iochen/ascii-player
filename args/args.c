@@ -16,7 +16,7 @@ void arg_list_add(arg_list *al, arg_type type, char *name, char short_name,
                   char *description) {
     al->args = realloc(al->args, ++al->arg_num * sizeof(arg));
     al->args[al->arg_num - 1] =
-        (arg){name, short_name, description, 0, type, (arg_value) (char *) NULL};
+        (arg){name, short_name, description, 0, type, (arg_value)(char *)NULL};
 }
 
 arg *arg_list_search(arg_list *al, char *key) {

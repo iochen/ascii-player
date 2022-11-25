@@ -1,9 +1,10 @@
+#include "av.h"
+
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/error.h>
 
 #include "config.h"
-#include "av.h"
 
 int find_codec_context(config *conf, AVFormatContext **p_fmt_ctxt,
                        AVCodecContext **p_a_cdc, AVCodecContext **p_v_cdc,
@@ -53,7 +54,8 @@ int find_codec_context(config *conf, AVFormatContext **p_fmt_ctxt,
             printf("Unable to initialize AVCodecContext\n");
             return -2;
         }
-        printf("\tCodec %s ID %d bit_rate %lld\n", codec->name, codec->id, codec_param->bit_rate);
+        printf("\tCodec %s ID %d bit_rate %lld\n", codec->name, codec->id,
+               codec_param->bit_rate);
         switch (codec->type) {
             case AVMEDIA_TYPE_VIDEO:
                 v_cdc = cdc;
@@ -85,8 +87,6 @@ int find_codec_context(config *conf, AVFormatContext **p_fmt_ctxt,
     (*p_v_cdc) = v_cdc;
     return 0;
 }
-
-
 
 void print_averror(int code) {
     char err[64];
