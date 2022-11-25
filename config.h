@@ -12,6 +12,8 @@ typedef struct {
     int no_audio;
     // fps <= 0 for srgument not supplied
     int fps;
+    int width;
+    int height;
 } config;
 
 config parse_config(int argc, char *argv[]);
