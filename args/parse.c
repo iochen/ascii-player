@@ -49,5 +49,14 @@ int parse_bool(char *value) {
 }
 
 int parse_int(char *value, int *succ) {
-    // TODO: Parse int from string
-}
+    int i = 0, n = 0;
+	for (; *(value + i) != '\0'; i++) {
+		if (*(value + i) >= '0' && *(value + i) <= '9')
+			n = n * 10 + *(value + i) - '0';
+		else { 
+			*succ = 0;
+			return 0; }
+	}
+	*succ = 1;
+	return n;
+    }
