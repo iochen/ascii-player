@@ -1,3 +1,4 @@
+#include <string.h>
 #include "parse.h"
 
 int parse_bool(char *value) {
@@ -16,7 +17,7 @@ int parse_bool(char *value) {
         if (strcasecmp(value, "on") == 0) {
             return 1;
         } else if (strcasecmp(value, "no") == 0) {
-            0;
+            return 0;
         } else {
             return -1;
         }
@@ -46,8 +47,10 @@ int parse_bool(char *value) {
     } else {
         return -1;
     }
+    return -1;
 }
 
 int parse_int(char *value, int *succ) {
     // TODO: Parse int from string
+    return 0;
 }
