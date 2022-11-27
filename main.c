@@ -5,10 +5,15 @@
 #include <libswscale/swscale.h>
 #include <ncurses.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include "av.h"
+#include "channel/channel.h"
 #include "config.h"
+#include "display.h"
+
 
 void print_help();
 
@@ -21,6 +26,9 @@ int main(int argc, char *argv[]) {
         print_help();
         return -1;
     }
+
+    initscr();
+
     // Parse program arguments into config.
     config conf = parse_config(argc, argv);
     if (conf.help) {
@@ -28,10 +36,7 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
-    initscr();
-    getmaxyx(stdscr, conf.height, conf.width);
-    // To avoid split line.
-    conf.width--;
+    // conf.height = conf.width = 100;
 
     // Initialize libavformat and register all the muxers, demuxers and
     // protocols.
@@ -70,16 +75,14 @@ int main(int argc, char *argv[]) {
     }
     frame_grey->width = conf.width;
     frame_grey->height = conf.height;
-    frame_grey->data[0] = (uint8_t *)av_malloc(
-        av_image_get_buffer_size(AV_PIX_FMT_GRAY8, conf.width, conf.height, 1));
-    av_image_fill_arrays(frame_grey->data, frame_grey->linesize,
-                         frame_grey->data[0], AV_PIX_FMT_GRAY8, conf.width,
-                         conf.height, 1);
 
     struct SwsContext *sws_ctxt = sws_getContext(
         v_cdc->width, v_cdc->height, v_cdc->pix_fmt, frame_grey->width,
-        frame_grey->height, AV_PIX_FMT_GRAY8, SWS_BILINEAR, 0, 0, 0);
+        frame_grey->height, AV_PIX_FMT_GRAY8, SWS_FAST_BILINEAR, 0, 0, 0);
 
+    conf.video_ch = alloc_channel(10);
+    pthread_t th_v, th_a;
+    int i = 0, started = 0;
     // While not the end of file.
     while (av_read_frame(fmt_ctxt, pckt) >= 0) {
         // If is video stream.
@@ -101,30 +104,28 @@ int main(int argc, char *argv[]) {
                     printf("Failed when decoding video(code: %d)\n", err);
                     return -5;
                 }
+                frame_grey->data[0] =
+                    (uint8_t *)av_malloc(av_image_get_buffer_size(
+                        AV_PIX_FMT_GRAY8, conf.width, conf.height, 1));
+                av_image_fill_arrays(frame_grey->data, frame_grey->linesize,
+                                     frame_grey->data[0], AV_PIX_FMT_GRAY8,
+                                     conf.width, conf.height, 1);
                 sws_scale(sws_ctxt, (const uint8_t *const *)frame->data,
                           frame->linesize, 0, v_cdc->height, frame_grey->data,
                           frame_grey->linesize);
-                clear();
-                for (int i = 0; i < frame_grey->height; i++) {
-                    for (int j = 0; j < frame_grey->linesize[0]; j++) {
-                        int g = frame_grey
-                                    ->data[0][i * frame_grey->linesize[0] + j];
-                        if (g > 128) {
-                            addch('.');
-                        } else {
-                            addch('#');
-                        }
-                    }
-                    addch('\n');
+                add_element(conf.video_ch, frame_grey->data[0]);
+                // printf("added i = %d\n", i++);
+                i++;
+                if (i == 5) {
+                    pthread_create(&th_v, NULL, play_video, &conf);
                 }
-                refresh();
-                usleep(15000);
             }
         } else if (pckt->stream_index == a_idx) {
         }
         av_packet_unref(pckt);
     }
 
+    av_frame_free(&frame_grey);
     av_frame_free(&frame);
     av_packet_free(&pckt);
     avcodec_free_context(&a_cdc);
