@@ -1,6 +1,8 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include "channel/channel.h"
+
 typedef struct {
     // filename can NOT be NULL or empty
     char *filename;
@@ -14,6 +16,10 @@ typedef struct {
     int fps;
     int width;
     int height;
+    char grey_ascii[256];
+    float grey_ascii_step;
+    Channel *video_ch;
+    Channel *audio_ch;
 } config;
 
 config parse_config(int argc, char *argv[]);
