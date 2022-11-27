@@ -54,8 +54,6 @@ int find_codec_context(config *conf, AVFormatContext **p_fmt_ctxt,
             printf("Unable to initialize AVCodecContext\n");
             return -2;
         }
-        printf("\tCodec %s ID %d bit_rate %lld\n", codec->name, codec->id,
-               codec_param->bit_rate);
         switch (codec->type) {
             case AVMEDIA_TYPE_VIDEO:
                 v_cdc = cdc;
