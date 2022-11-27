@@ -1,8 +1,9 @@
 #include "channel.h"
-#include "channel_err.h"
+
 #include <pthread.h>
 #include <stdlib.h>
 
+#include "channel_err.h"
 
 Channel *alloc_channel(int cap) {
     if (cap < 1) {
@@ -41,6 +42,9 @@ int add_element(Channel *ch, void *ele) {
 }
 
 int read_element(Channel *ch, void **p_ele) {
+    if (!ch) {
+        return NULLCH;
+    }
     pthread_mutex_lock(&ch->lock);
     if (ch->len < 0) {
         return UNDERFLOW;

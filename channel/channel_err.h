@@ -2,6 +2,7 @@
 #define CHANNEL_ERR_H
 
 typedef enum {
+    NULLCH = 1,
     SUCCESS = 0,
     UNKNOWN = -1,
     OVERFLOW = -2,
