@@ -1,19 +1,22 @@
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include <libavresample/avresample.h>
 #include <libavutil/error.h>
+#include <libavutil/opt.h>
 #include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
+#include <libavresample/avresample.h>
 #include <ncurses.h>
+#include <portaudio.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include <pthread.h>
 
 #include "av.h"
 #include "channel/channel.h"
 #include "config.h"
 #include "display.h"
-
 
 void print_help();
 
@@ -81,7 +84,53 @@ int main(int argc, char *argv[]) {
         frame_grey->height, AV_PIX_FMT_GRAY8, SWS_FAST_BILINEAR, 0, 0, 0);
 
     conf.video_ch = alloc_channel(10);
-    pthread_t th_v, th_a;
+    conf.video_ch->tag = "video";
+    conf.audio_ch = alloc_channel(30);
+    conf.audio_ch->tag = "audio";
+    pthread_t th_v;
+
+    AVFrame *audio_frame = av_frame_alloc();
+    if (!audio_frame) {
+        printf("Unable to allocate AVFrame for audio frame\n");
+        return -2;
+    }
+ AVAudioResampleContext *resample_ctxt = avresample_alloc_context();
+    if (!resample_ctxt) {
+        printf("Unable to allocate AVAudioResampleContext\n");
+        return -2;
+    }
+    audio_frame->channel_layout = AV_CH_LAYOUT_STEREO;
+    audio_frame->sample_rate = a_cdc->sample_rate;
+    audio_frame->format = AV_SAMPLE_FMT_FLT;
+
+    PaStreamParameters pa_stm_param;
+    PaStream *stream;
+    err = Pa_Initialize();
+    if (err != paNoError) {
+        printf("PortAudio init error(code: %d).\n", err);
+        return -20;
+    }
+    pa_stm_param.device = Pa_GetDefaultOutputDevice();
+    if (pa_stm_param.device == paNoDevice) {
+        printf("Can NOT find audio device.\n");
+        return -20;
+    }
+    pa_stm_param.sampleFormat = paFloat32;
+    pa_stm_param.channelCount = 2;
+    pa_stm_param.suggestedLatency =
+        Pa_GetDeviceInfo(pa_stm_param.device)->defaultLowOutputLatency;
+    pa_stm_param.hostApiSpecificStreamInfo = NULL;
+    err = Pa_OpenStream(&stream, NULL, /* no input */
+                        &pa_stm_param, a_cdc->sample_rate, 1024,
+                        paClipOff, /* we won't output out of range samples so
+                                      don't bother clipping them */
+                        audio_callback, &conf);
+    if (err != paNoError) {
+        printf("Error when opening audio stream.(code %d)\n", err);
+        return -20;
+    }
+    Pa_StartStream(stream);
+
     int i = 0, started = 0;
     // While not the end of file.
     while (av_read_frame(fmt_ctxt, pckt) >= 0) {
@@ -90,7 +139,7 @@ int main(int argc, char *argv[]) {
             err = avcodec_send_packet(v_cdc, pckt);
             if (err < 0) {
                 printf(
-                    "Error when supplying raw packet data as input to a "
+                    "Error when supplying raw packet data as input to video "
                     "decoder.(code: %d)\n",
                     err);
                 return -10;
@@ -114,15 +163,45 @@ int main(int argc, char *argv[]) {
                           frame->linesize, 0, v_cdc->height, frame_grey->data,
                           frame_grey->linesize);
                 add_element(conf.video_ch, frame_grey->data[0]);
-                // printf("added i = %d\n", i++);
+                av_frame_unref(frame_grey);
                 i++;
                 if (i == 5) {
                     pthread_create(&th_v, NULL, play_video, &conf);
                 }
             }
         } else if (pckt->stream_index == a_idx) {
+            err = avcodec_send_packet(a_cdc, pckt);
+            if (err < 0) {
+                printf(
+                    "Error when supplying raw packet data as input to audio "
+                    "decoder.(code: %d)\n",
+                    err);
+                return -10;
+            }
+            while (1) {
+                err = avcodec_receive_frame(a_cdc, frame);
+                if (err != 0) {
+                    if (err == AVERROR(EAGAIN) || err == AVERROR_EOF) {
+                        break;
+                    }
+                    printf("Failed when decoding audio(code: %d)\n", err);
+                    return -5;
+                }
+                err = avresample_convert_frame(resample_ctxt, audio_frame, frame);
+                if (err != 0) {
+                    print_averror(err);
+                    return -20;
+                }
+                add_element(conf.audio_ch, audio_frame->data[0]);
+                audio_frame->data[0] = NULL;
+                audio_frame->linesize[0] = 0;
+            }
+        }
+        for (int i = 0;  i < 8; i++) {
+            av_buffer_unref(frame->buf + i);
         }
         av_packet_unref(pckt);
+        av_frame_unref(frame);
     }
 
     av_frame_free(&frame_grey);
