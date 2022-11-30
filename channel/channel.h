@@ -5,6 +5,8 @@
 
 // A buffered channel.
 typedef struct {
+    // name
+    char *tag;
     // mutex lock to keep structure thread-safe
     pthread_mutex_t lock;
     // data buf (void * array)

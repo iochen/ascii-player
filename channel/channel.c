@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "channel_err.h"
 
@@ -27,7 +28,7 @@ Channel *alloc_channel(int cap) {
     }
     // init channel
     *ch = (Channel){
-        PTHREAD_MUTEX_INITIALIZER, buf, cap, 0, 0, 0, PTHREAD_COND_INITIALIZER,
+        NULL, PTHREAD_MUTEX_INITIALIZER, buf, cap, 0, 0, 0, PTHREAD_COND_INITIALIZER,
         PTHREAD_COND_INITIALIZER};
     return ch;
 }
@@ -108,6 +109,7 @@ int read_element(Channel *ch, void **p_ele) {
     }
     // buf empty
     if (ch->len == 0) {
+        printf("%s Drain!\n", ch->tag);
         pthread_cond_wait(&ch->consumer_cond, &ch->lock);
     }
     // invalid read_n
