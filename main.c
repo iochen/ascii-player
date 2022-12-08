@@ -1,11 +1,10 @@
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
-#include <libavresample/avresample.h>
+#include <libswresample/swresample.h>
 #include <libavutil/error.h>
 #include <libavutil/opt.h>
 #include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
-#include <libavresample/avresample.h>
 #include <ncurses.h>
 #include <portaudio.h>
 #include <pthread.h>
@@ -41,10 +40,6 @@ int main(int argc, char *argv[]) {
 
     // conf.height = conf.width = 100;
 
-    // Initialize libavformat and register all the muxers, demuxers and
-    // protocols.
-    av_register_all();
-    avcodec_register_all();
 
     // Create Audio and Video Fromat Context.
     AVFormatContext *fmt_ctxt = NULL;
@@ -85,7 +80,7 @@ int main(int argc, char *argv[]) {
 
     conf.video_ch = alloc_channel(10);
     conf.video_ch->tag = "video";
-    conf.audio_ch = alloc_channel(30);
+    conf.audio_ch = alloc_channel(3);
     conf.audio_ch->tag = "audio";
     pthread_t th_v;
 
@@ -94,7 +89,7 @@ int main(int argc, char *argv[]) {
         printf("Unable to allocate AVFrame for audio frame\n");
         return -2;
     }
- AVAudioResampleContext *resample_ctxt = avresample_alloc_context();
+    SwrContext *resample_ctxt =  swr_alloc();
     if (!resample_ctxt) {
         printf("Unable to allocate AVAudioResampleContext\n");
         return -2;
@@ -187,7 +182,7 @@ int main(int argc, char *argv[]) {
                     printf("Failed when decoding audio(code: %d)\n", err);
                     return -5;
                 }
-                err = avresample_convert_frame(resample_ctxt, audio_frame, frame);
+                err = swr_convert_frame(resample_ctxt, audio_frame, frame);
                 if (err != 0) {
                     print_averror(err);
                     return -20;
