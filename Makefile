@@ -4,14 +4,27 @@ OBJDIR = obj
 CC = clang
 SUBMODULES = args channel
 OBJECTS = $(addprefix $(OBJDIR)/, main.o config.o display.o args/parse.o args/args.o av.o channel/channel.o)
-LDFLAGS = -lavcodec -lavformat -lavfilter -lavdevice -lavresample -lswscale -lavutil -lz -lbz2 -lncurses
-FRAMEWORKFLAGS = $(addprefix -framework , CoreFoundation VideoDecodeAcceleration CoreVideo)
+LDFLAGS = -lavcodec -lavformat -lavfilter -lavdevice -lswresample -lswscale -lavutil -lz -lbz2 -lncurses -lportaudio -liconv
+CCFLAGS = -Wall
+FRAMEWORKFLAGS = $(addprefix -framework , CoreFoundation VideoDecodeAcceleration CoreVideo AudioToolbox VideoToolbox Security CoreMedia)
+UNAME = $(shell uname)
+OSFLAGS = 
+
+# macOS
+ifeq ($(UNAME), Darwin)
+	OSFLAGS = $(FRAMEWORKFLAGS)
+endif
+
+# Linux
+ifeq ($(UNAME), Linux)
+	OSFLAGS = -I/usr/include/
+endif
 
 $(TARGET): PREPARE $(OBJECTS)
-	$(CC) -o $(BUILDDIR)/$(TARGET) $(OBJECTS) $(LDFLAGS) $(FRAMEWORKFLAGS)
+	$(CC) $(CCFLAGS) -o $(BUILDDIR)/$(TARGET) $(OBJECTS) $(LDFLAGS) $(OSFLAGS) -I/usr/include/
 
 $(OBJDIR)/%.o : %.c
-	$(CC) -c $< -o $@
+	$(CC) -I/usr/include/ -c $< -o $@
 
 PREPARE:
 	mkdir -p $(addprefix $(OBJDIR)/, $(SUBMODULES)) $(BUILDDIR)
