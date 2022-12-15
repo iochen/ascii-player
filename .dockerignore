@@ -1,0 +1,9 @@
+/.vscode
+/obj
+/build
+*.exe
+*.out
+.DS_Store
+*.o
+/.git
+/.gitignore
