@@ -5,8 +5,6 @@
 
 // A buffered channel.
 typedef struct {
-    // name
-    char *tag;
     // mutex lock to keep structure thread-safe
     pthread_mutex_t lock;
     // data buf (void * array)
@@ -30,11 +28,11 @@ typedef struct {
 /// @brief Allocate Channel on heap.
 /// @param cap Channel capaticy (limit: >0).
 /// @return The pointer to allocated on heap.
-Channel *alloc_channel(int cap);
+extern Channel *alloc_channel(int cap);
 
 /// @brief Free Channel.
 /// @param ch Pointer to Channel.
-void free_channel(Channel *ch);
+extern void free_channel(Channel *ch);
 
 /// @brief Add an element to Channel.
 /// @param ch To which Cahnnel the element should be added.
@@ -42,7 +40,7 @@ void free_channel(Channel *ch);
 /// @return =0: Success
 ///         >0: Mutex lock error
 ///         <0: ChannelErr error
-int add_element(Channel *ch, void *ele);
+extern int add_element(Channel *ch, void *ele);
 
 /// @brief Read element from Channel
 /// @param ch From which Channel the element should be read.
@@ -50,7 +48,7 @@ int add_element(Channel *ch, void *ele);
 /// @return =0: Success
 ///         >0: Mutex lock error
 ///         <0: ChannelErr error
-int read_element(Channel *ch, void **p_ele);
+extern int read_element(Channel *ch, void **p_ele);
 
 /// @brief Non-blockingly read element from Channel with.
 /// @param ch From which Channel the element should be read.
@@ -58,6 +56,6 @@ int read_element(Channel *ch, void **p_ele);
 /// @return =0: Success and lock is not locked
 ///         >0: Mutex lock error or lock is busy (= EBUSY)
 ///         <0: ChannelErr error
-int read_element_nb(Channel *ch, void **p_ele);
+extern int read_element_nb(Channel *ch, void **p_ele);
 
 #endif
