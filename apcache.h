@@ -26,8 +26,8 @@
 ||-------------------------------|--------------------------|-----------------------||
 ||          FRAME[0]_SIZE        |           uint32         |            4          ||
 ||-------------------------------|--------------------------|-----------------------||
-||          FRAME[0]_DATA        |  unsigned char / float   |      FRAME[0]_SIZE    ||
-||----------------------------------------------------------|-----------------------||
+||          FRAME[0]_DATA        | unsigned char[]/ float[] |      FRAME[0]_SIZE    ||
+||-------------------------------|--------------------------|-----------------------||
 ||          FRAME[1]_TYPE        |           uint8          |            1          ||
 ||-------------------------------|--------------------------|-----------------------||
 ||          FRAME[1]_SIZE        |           uint32         |            4          ||
@@ -69,6 +69,8 @@ typedef enum {
 typedef struct {
     // Version number of apcache file format.
     int32_t version;
+    // Frames per second
+    uint32_t fps;
     // Width for each video frame
     uint32_t width;
     // Height for each video frame
@@ -112,9 +114,10 @@ APCache *apcache_alloc();
 /// @note (*apc) will be set to NULL.
 void apcache_free(APCache **apc);
 
-/// @brief Create an apcache file in write mode
-/// @param apc APCache struct with width, height, sample_rate set to target number,
-///            and other fields unset.
+/// @brief Write meta data to apcache file
+/// @param apc APCache struct with fps, width, height, sample_rate set to target number,
+///            file pointed to a opened FILE with mode set to "w",
+///            version set to target version (1).
 /// @return 0 for success, minus number for APCacheErr
 int apcache_create(APCache *apc);
 
@@ -144,4 +147,5 @@ int apcache_open(char *filename, APCache **apc);
 /// @return 0 for success, minus number for APCacheErr
 int apcache_read_frame(APCache *apc, APFrame **frame);
 
+int apcache_close(APCache *apc);
 #endif

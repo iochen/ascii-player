@@ -79,9 +79,7 @@ int main(int argc, char *argv[]) {
         frame_grey->height, AV_PIX_FMT_GRAY8, SWS_FAST_BILINEAR, 0, 0, 0);
 
     conf.video_ch = alloc_channel(10);
-    conf.video_ch->tag = "video";
     conf.audio_ch = alloc_channel(3);
-    conf.audio_ch->tag = "audio";
     pthread_t th_v;
 
     AVFrame *audio_frame = av_frame_alloc();
