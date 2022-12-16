@@ -57,7 +57,7 @@ int parse_args(arg_list *al, int argc, char *argv[]) {
         if (argv[i][0] == '-') {
             arg *ag = arg_list_search(al, argv[i]);
             // if arg type is a flag
-            if (ag->type == FLAG) {
+            if (ag->type == ARG_TYPE_FLAG) {
                 // if has value
                 if (i < argc - 1 && argv[i + 1][0] != '-') {
                     int b_value = parse_bool(argv[i + 1]);
@@ -71,8 +71,8 @@ int parse_args(arg_list *al, int argc, char *argv[]) {
                     ag->set = 1;
                     ag->value = (arg_value)1;
                 }
-            } else if (ag->type == NUMBER) {
-                if (i < argc - 1) {
+            } else if (ag->type == ARG_TYPE_NUMBER) {
+                if (i >= argc - 1) {
                     return -2;
                 }
                 int succ = 0;
@@ -83,8 +83,8 @@ int parse_args(arg_list *al, int argc, char *argv[]) {
                 ag->set = 1;
                 ag->value = (arg_value)i_value;
                 i++;
-            } else if (ag->type == STRING) {
-                if (i < argc - 1) {
+            } else if (ag->type == ARG_TYPE_STRING) {
+                if (i >= argc - 1) {
                     return -4;
                 }
                 ag->set = 1;
@@ -108,7 +108,7 @@ char *parse_args_err(int code) {
         case -3:
             return "Unable to parse int";
         case -4:
-            return "No value after a number typed arg";
+            return "No value after a string typed arg";
         case -5:
             return "Unknown arg type";
         default:

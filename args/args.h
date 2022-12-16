@@ -1,10 +1,9 @@
 #ifndef ARGS_H
 #define ARGS_H
 
-typedef enum { FLAG, NUMBER, STRING } arg_type;
+typedef enum { ARG_TYPE_FLAG, ARG_TYPE_NUMBER, ARG_TYPE_STRING } arg_type;
 
 typedef union {
-    int flag;
     int number;
     char *str;
 } arg_value;
