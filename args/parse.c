@@ -2,7 +2,7 @@
 
 #include <string.h>
 
-int parse_bool(char *value) {
+int parse_bool(const char *value) {
     int value_len = strlen(value);
     // one char value
     if (value_len == 1) {
@@ -51,16 +51,22 @@ int parse_bool(char *value) {
     return -1;
 }
 
-int parse_int(char *value, int *succ) {
-    int i = 0, n = 0;
-    for (; *(value + i) != '\0'; i++) {
-        if (*(value + i) >= '0' && *(value + i) <= '9')
-            n = n * 10 + *(value + i) - '0';
+int parse_int(const char *value, int *succ) {
+    int num = 0, sng = 1;
+    if (value[0] == '-') {
+        sng = -1;
+        value++;
+    } else if (value[0] == '+') {
+        value++;
+    }
+    for (int i = 0; value[i] != '\0'; i++) {
+        if (value[i] >= '0' && value[i] <= '9')
+            num = num * 10 + value[i] - '0';
         else {
             *succ = 0;
             return 0;
         }
     }
     *succ = 1;
-    return n;
+    return num;
 }
