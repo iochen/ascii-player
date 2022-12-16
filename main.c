@@ -1,13 +1,14 @@
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
-#include <libswresample/swresample.h>
 #include <libavutil/error.h>
-#include <libavutil/opt.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/opt.h>
+#include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 #include <ncurses.h>
 #include <portaudio.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -18,28 +19,41 @@
 #include "display.h"
 
 void print_help();
+void print_license();
 
 // TODO: Add log module
 // TODO: modulize some functions
+
+void handle_int(int dummy) {
+    endwin();
+    exit(0);
+}
 
 int main(int argc, char *argv[]) {
     // Insucfficient program arguments.
     if (argc < 2) {
         print_help();
-        return -1;
+        return 0;
     }
 
     initscr();
 
+    signal(SIGINT, handle_int);
+
     // Parse program arguments into config.
     config conf = parse_config(argc, argv);
+
     if (conf.help) {
+        endwin();
         print_help();
         return 0;
     }
-
+    if (conf.license) {
+        endwin();
+        print_license();
+        return 0;
+    }
     // conf.height = conf.width = 100;
-
 
     // Create Audio and Video Fromat Context.
     AVFormatContext *fmt_ctxt = NULL;
@@ -54,6 +68,13 @@ int main(int argc, char *argv[]) {
     if (err != 0) {
         return err;
     }
+
+    if (v_cdc->framerate.num == 0) {
+        endwin();
+        printf("Unknown FPS\n");
+        exit(-1);
+    }
+    conf.fps = (double) v_cdc->framerate.num / v_cdc->framerate.den;
 
     // Allocate AVPacket and AVFrame.
     AVPacket *pckt = av_packet_alloc();
@@ -79,7 +100,7 @@ int main(int argc, char *argv[]) {
         frame_grey->height, AV_PIX_FMT_GRAY8, SWS_FAST_BILINEAR, 0, 0, 0);
 
     conf.video_ch = alloc_channel(10);
-    conf.audio_ch = alloc_channel(3);
+    // conf.audio_ch = alloc_channel(3);
     pthread_t th_v;
 
     AVFrame *audio_frame = av_frame_alloc();
@@ -87,7 +108,7 @@ int main(int argc, char *argv[]) {
         printf("Unable to allocate AVFrame for audio frame\n");
         return -2;
     }
-    SwrContext *resample_ctxt =  swr_alloc();
+    SwrContext *resample_ctxt = swr_alloc();
     if (!resample_ctxt) {
         printf("Unable to allocate AVAudioResampleContext\n");
         return -2;
@@ -98,6 +119,7 @@ int main(int argc, char *argv[]) {
 
     PaStreamParameters pa_stm_param;
     PaStream *stream;
+    if (!conf.no_audio) {
     err = Pa_Initialize();
     if (err != paNoError) {
         printf("PortAudio init error(code: %d).\n", err);
@@ -117,14 +139,15 @@ int main(int argc, char *argv[]) {
                         &pa_stm_param, a_cdc->sample_rate, 1024,
                         paClipOff, /* we won't output out of range samples so
                                       don't bother clipping them */
-                        audio_callback, &conf);
+                        NULL, NULL);
     if (err != paNoError) {
         printf("Error when opening audio stream.(code %d)\n", err);
         return -20;
     }
     Pa_StartStream(stream);
+    }
 
-    int i = 0, started = 0;
+    int frame_count = 0, audio_count = 0;
     // While not the end of file.
     while (av_read_frame(fmt_ctxt, pckt) >= 0) {
         // If is video stream.
@@ -157,12 +180,12 @@ int main(int argc, char *argv[]) {
                           frame_grey->linesize);
                 add_element(conf.video_ch, frame_grey->data[0]);
                 av_frame_unref(frame_grey);
-                i++;
-                if (i == 5) {
+                frame_count++;
+                if (frame_count == 5) {
                     pthread_create(&th_v, NULL, play_video, &conf);
                 }
             }
-        } else if (pckt->stream_index == a_idx) {
+        } else if (!conf.no_audio && pckt->stream_index == a_idx) {
             err = avcodec_send_packet(a_cdc, pckt);
             if (err < 0) {
                 printf(
@@ -172,6 +195,7 @@ int main(int argc, char *argv[]) {
                 return -10;
             }
             while (1) {
+                audio_count++;
                 err = avcodec_receive_frame(a_cdc, frame);
                 if (err != 0) {
                     if (err == AVERROR(EAGAIN) || err == AVERROR_EOF) {
@@ -185,13 +209,15 @@ int main(int argc, char *argv[]) {
                     print_averror(err);
                     return -20;
                 }
-                add_element(conf.audio_ch, audio_frame->data[0]);
+                // APAudioData *apad = (APAudioData
+                // *)malloc(sizeof(APAudioData)); apad->nb_samples =
+                // audio_frame->nb_samples; apad->data = (float *)
+                // audio_frame->data[0];
+                Pa_WriteStream(stream, audio_frame->data[0],
+                               audio_frame->nb_samples);
                 audio_frame->data[0] = NULL;
                 audio_frame->linesize[0] = 0;
             }
-        }
-        for (int i = 0;  i < 8; i++) {
-            av_buffer_unref(frame->buf + i);
         }
         av_packet_unref(pckt);
         av_frame_unref(frame);
@@ -203,22 +229,33 @@ int main(int argc, char *argv[]) {
     avcodec_free_context(&a_cdc);
     avcodec_free_context(&v_cdc);
     avformat_free_context(fmt_ctxt);
+    endwin();
 }
 
 void print_help() {
     printf(
-        "ASCII Player v0.0.1-dev\n"
-        "\n"
-        "Usage: asciiplayer <file> [-h | --help] [--cache <file>]\n"
-        "                          [-n | --no-audio] [-f <fps> | --fps <fps>]\n"
-        "\n"
-        "       --help -h            Print this help page\n"
-        "       --cache -c <file>    Process video into a cached file\n"
-        "                            example: $ asciiplayer video.mp4 --cache "
-        "cached.apc\n"
-        "       --no-audio -n        Play video without playing audio\n"
-        "       --fps -f <fps>       Play in <fps> frames per second.\n"
-        "                            Note: Please use a number that is a "
-        "factor of file fps.\n"
-        "\n");
+        "ASCII Player v1.0.0\n\
+A media player that plays video file in ASCII characters.\n\
+Usage: asciiplayer <file> [-h | --help] [-l | --license] [--cache <file>]\n\
+                          [-n | —no-audio]\n\
+       --help -h            Print this help page\n\
+       --license -l         Show license and author info\n\
+       --cache -c <file>    Process video into a cached file\n\
+                            example: $ asciiplayer video.mp4 --cache cached.apcache\n\
+       --no-audio -n        Play video without playing audio\n");
+}
+
+void print_license() {
+    printf(
+        "ASCII Player is an open-source software (GNU GPLv3) written in C programming language.\n\
+\n\
+Author(s):\n\
+    Maintainer: Zhendong Chen 221870144 @ Nanjing University\n\
+    Developer : Yuqing Tang   221870117 @ Nanjing University\n\
+    Developer : Yaqi Dong     221870103 @ Nanjing University\n\
+\n\
+Special Thanks To:\n\
+    GNU Project\n\
+    FFmpeg\n\
+    PortAudio\n");
 }
