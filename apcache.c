@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "apcache.h"
+#include <string.h>
 
 /// @brief Allocate an apcache frame object.
 /// @param type APAVType
@@ -40,7 +41,6 @@ void apcache_frame_free(APFrame **frame) {
 APCache *apcache_alloc(){
     APCache *apc = (APCache *)malloc(sizeof(APCache));
     if (!apc) {
-        free(apc);
         return NULL;
     }
     apc->version = APCACHE_VERSION;
@@ -59,7 +59,6 @@ void apcache_free(APCache **apc){
     if (!apc || !(*apc)) {
         return;
     }
-    free((**apc).file);
     free(*apc);
     *apc = NULL;
 }
@@ -76,7 +75,7 @@ int apcache_create(APCache *apc){
         return APCACHE_ERR_FILE_NOT_EXIST;
     if(apc->version!=APCACHE_VERSION)
         return APCACHE_ERR_UNKNOWN_VERSION;
-    fputs("apache\n",apc->file);
+    fputs("apcache\n",apc->file);
     fwrite(&apc->version,sizeof(int32_t),1,apc->file);
     fwrite(&apc->fps,sizeof(uint32_t),1,apc->file);
     fwrite(&apc->width,sizeof(uint32_t),1,apc->file);
@@ -101,7 +100,8 @@ int apcache_write_frame(APCache *apc, APFrame *frame){
         return APCACHE_ERR_FRAME_NOT_EXIST;
     if(frame->type!=APAV_AUDIO&&frame->type!=APAV_VIDEO)
         return APCACHE_ERR_UNKNOWN_FORMAT;
-    fwrite(&frame->type,sizeof(uint8_t),1,apc->file);
+    uint8_t type = frame->type;
+    fwrite(&type, sizeof(uint8_t),1,apc->file);
     fwrite(&frame->bsize,sizeof(uint32_t),1,apc->file);
     fwrite(&frame->data,frame->bsize,1,apc->file);
     fflush(apc->file);
@@ -119,17 +119,18 @@ int is_apcache(char *filename){
     if(!filename)
         return APCACHE_ERR_FILE_NOT_EXIST;
     FILE *fp;
-    char *p;
-    fp=fopen(*filename,"r");
+    char p[9];
+    fp=fopen(filename,"r");
     if(!fp)
         return APCACHE_ERR_PERMISSION_DENIED;
-    fgets(p,7,fp);
-    if(!strcmp(p,"apache\n"))
+    fgets(p,8,fp);
+    if(strcmp(p,"apcache\n") != 0)
         return APCACHE_ERR_UNKNOWN_FORMAT;
     int32_t version;
     fread(&version,sizeof(int32_t),1,fp);
     if(version!=APCACHE_VERSION)
         return APCACHE_ERR_UNKNOWN_VERSION;
+    fclose(fp);
     return 0;
 }
 
@@ -140,13 +141,14 @@ int apcache_open(char *filename, APCache **apcadd){
     if(!filename)
         return APCACHE_ERR_FILE_NOT_EXIST;
     FILE *fp;
-    fp=fopen(*filename,"r");
+    fp=fopen(filename,"r");
     if(!fp)
         return APCACHE_ERR_PERMISSION_DENIED;
     APCache *apc;
     apc=apcache_alloc();
     if(!apc)
         return APCACHE_ERR_APCACHE_NULL;
+    // TODO: read meta data out
     *apcadd=apc;
     return 0;
 }
