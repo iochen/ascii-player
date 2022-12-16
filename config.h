@@ -8,12 +8,13 @@ typedef struct {
     char *filename;
     // as a bool value
     int help;
+    // as a bool value
+    int license;
     // NULL for argument not supplied
     char *cache;
     // as a bool value
     int no_audio;
-    // fps <= 0 for srgument not supplied
-    int fps;
+    double fps;
     int width;
     int height;
     char grey_ascii[256];
