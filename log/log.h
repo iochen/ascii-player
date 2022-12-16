@@ -31,29 +31,37 @@ typedef struct {
     int has_linenum;
 } Logger;
 
-extern Logger default_logger = {NULL, LL_WARN, 1, 1, 1, 1, 1};
-
 // Initialize default_logger to default value
 extern void logger_init();
 
+Logger logger_get_default();
+
+void logger_set_default(const Logger logger);
+
 extern void logger_log_code(Logger logger, LogLevel ll, int err_code,
+                            char *filename, int linenum, ...);
+
+extern void logger_log_code_default(LogLevel ll, int err_code,
                             char *filename, int linenum, ...);
 
 #define logger_log(logger, ll, filename, linenum, ...) \
     logger_log_code(logger, ll, LOG_DEFAULT_CODE, filename, linenum, ...)
 
+#define logger_log_default(ll, filename, linenum, ...) \
+    logger_log_code_default(ll, LOG_DEFAULT_CODE, filename, linenum, ...)
+
 #define fatal(err_code, ...) \
-    logger_log_code(default_logger, LL_FATAL, err_code, __FILE__, __LINE__, __VA_ARGS__);
+    logger_log_code_default(LL_FATAL, err_code, __FILE__, __LINE__, __VA_ARGS__);
 #define error(...) \
-    logger_log(default_logger, LL_ERROR, __FILE__, __LINE__, __VA_ARGS__);
+    logger_log_default(LL_ERROR, __FILE__, __LINE__, __VA_ARGS__);
 #define warn(...) \
-    logger_log(default_logger, LL_WARN, __FILE__, __LINE__, __VA_ARGS__);
+    logger_log_default(LL_WARN, __FILE__, __LINE__, __VA_ARGS__);
 #define info(...) \
-    logger_log(default_logger, LL_INFO, __FILE__, __LINE__, __VA_ARGS__);
+    logger_log_default(LL_INFO, __FILE__, __LINE__, __VA_ARGS__);
 #define debug(...) \
-    logger_log(default_logger, LL_DEBUG, __FILE__, __LINE__, __VA_ARGS__);
+    logger_log_default(LL_DEBUG, __FILE__, __LINE__, __VA_ARGS__);
 #define trace(...) \
-    logger_log(default_logger, LL_TRACE, __FILE__, __LINE__, __VA_ARGS__);
+    logger_log_default(LL_TRACE, __FILE__, __LINE__, __VA_ARGS__);
 
 #define log_fatal(logger, err_code, ...) \
     logger_log_code(logger, LL_FATAL, err_code, __FILE__, __LINE__, __VA_ARGS__);
