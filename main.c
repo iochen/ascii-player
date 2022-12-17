@@ -69,12 +69,14 @@ int main(int argc, char *argv[]) {
         return err;
     }
 
-    if (v_cdc->framerate.num == 0) {
-        endwin();
-        printf("Unknown FPS\n");
-        exit(-1);
+    if (conf.no_audio) {
+        if (v_cdc->framerate.num == 0) {
+            endwin();
+            printf("Unknown FPS\n");
+            exit(-1);
+        }
+        conf.fps = (double)v_cdc->framerate.num / v_cdc->framerate.den;
     }
-    conf.fps = (double) v_cdc->framerate.num / v_cdc->framerate.den;
 
     // Allocate AVPacket and AVFrame.
     AVPacket *pckt = av_packet_alloc();
@@ -120,31 +122,30 @@ int main(int argc, char *argv[]) {
     PaStreamParameters pa_stm_param;
     PaStream *stream;
     if (!conf.no_audio) {
-    err = Pa_Initialize();
-    if (err != paNoError) {
-        printf("PortAudio init error(code: %d).\n", err);
-        return -20;
-    }
-    pa_stm_param.device = Pa_GetDefaultOutputDevice();
-    if (pa_stm_param.device == paNoDevice) {
-        printf("Can NOT find audio device.\n");
-        return -20;
-    }
-    pa_stm_param.sampleFormat = paFloat32;
-    pa_stm_param.channelCount = 2;
-    pa_stm_param.suggestedLatency =
-        Pa_GetDeviceInfo(pa_stm_param.device)->defaultLowOutputLatency;
-    pa_stm_param.hostApiSpecificStreamInfo = NULL;
-    err = Pa_OpenStream(&stream, NULL, /* no input */
-                        &pa_stm_param, a_cdc->sample_rate, 1024,
-                        paClipOff, /* we won't output out of range samples so
-                                      don't bother clipping them */
-                        NULL, NULL);
-    if (err != paNoError) {
-        printf("Error when opening audio stream.(code %d)\n", err);
-        return -20;
-    }
-    Pa_StartStream(stream);
+        err = Pa_Initialize();
+        if (err != paNoError) {
+            printf("PortAudio init error(code: %d).\n", err);
+            return -20;
+        }
+        pa_stm_param.device = Pa_GetDefaultOutputDevice();
+        if (pa_stm_param.device == paNoDevice) {
+            printf("Can NOT find audio device.\n");
+            return -20;
+        }
+        pa_stm_param.sampleFormat = paFloat32;
+        pa_stm_param.channelCount = 2;
+        pa_stm_param.suggestedLatency =
+            Pa_GetDeviceInfo(pa_stm_param.device)->defaultLowOutputLatency;
+        pa_stm_param.hostApiSpecificStreamInfo = NULL;
+        err = Pa_OpenStream(&stream, NULL, /* no input */
+                            &pa_stm_param, a_cdc->sample_rate, 512,
+                            paClipOff, /* we won't output out of range samples
+                                          so don't bother clipping them */
+                            NULL, NULL);
+        if (err != paNoError) {
+            printf("Error when opening audio stream.(code %d)\n", err);
+            return -20;
+        }
     }
 
     int frame_count = 0, audio_count = 0;
@@ -181,7 +182,7 @@ int main(int argc, char *argv[]) {
                 add_element(conf.video_ch, frame_grey->data[0]);
                 av_frame_unref(frame_grey);
                 frame_count++;
-                if (frame_count == 5) {
+                if (frame_count == 1) {
                     pthread_create(&th_v, NULL, play_video, &conf);
                 }
             }
@@ -213,6 +214,9 @@ int main(int argc, char *argv[]) {
                 // *)malloc(sizeof(APAudioData)); apad->nb_samples =
                 // audio_frame->nb_samples; apad->data = (float *)
                 // audio_frame->data[0];
+                if (audio_count == 1) {
+                    Pa_StartStream(stream);
+                }
                 Pa_WriteStream(stream, audio_frame->data[0],
                                audio_frame->nb_samples);
                 audio_frame->data[0] = NULL;
