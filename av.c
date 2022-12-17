@@ -35,7 +35,7 @@ int find_codec_context(config *conf, AVFormatContext **p_fmt_ctxt,
 
     for (int i = 0; i < fmt_ctxt->nb_streams; i++) {
         AVCodecParameters *codec_param = fmt_ctxt->streams[i]->codecpar;
-        AVCodec *codec = avcodec_find_decoder(codec_param->codec_id);
+        const AVCodec *codec = avcodec_find_decoder(codec_param->codec_id);
         if (!codec) {
             continue;
         }
