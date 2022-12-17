@@ -52,9 +52,9 @@ int parse_bool(const char *value) {
 }
 
 int parse_int(const char *value, int *succ) {
-    int num = 0, sng = 1;
+    int num = 0, sgn = 1;
     if (value[0] == '-') {
-        sng = -1;
+        sgn = -1;
         value++;
     } else if (value[0] == '+') {
         value++;
@@ -68,5 +68,5 @@ int parse_int(const char *value, int *succ) {
         }
     }
     *succ = 1;
-    return num;
+    return sgn * num;
 }
