@@ -6,6 +6,15 @@
 #include <string.h>
 #include "args/args.h"
 
+static char *str_rev(char *str) {
+    for (int i = 0, j = strlen(str) - 1; i < j; i++, j--) {
+        char tmp = str[i];
+        str[i] = str[j];
+        str[j] = tmp;
+    }
+    return str;
+}
+
 static config default_config() {
     config conf;
     conf.cache = 0;
@@ -17,8 +26,8 @@ static config default_config() {
 
     getmaxyx(stdscr, conf.height, conf.width);
     conf.width--;
-
-    strcpy(conf.grey_ascii, " .:-=+*#%@");
+    char s[] = " .:-=+*#%@";
+    strcpy(conf.grey_ascii,s);
     conf.grey_ascii_step = (strlen(conf.grey_ascii) - 1) / 255.0;
     conf.video_ch = NULL;
     conf.audio_ch = NULL;
