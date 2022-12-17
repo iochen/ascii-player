@@ -16,3 +16,6 @@ RUN apk add ffmpeg-libs ffmpeg-dev
 RUN apk add ffmpeg
 RUN apk add bash
 ADD . /asciiplayer
+WORKDIR /asciiplayer
+RUN make
+# ENTRYPOINT [ "/asciiplayer/build/asciiplayer" ]
