@@ -1,7 +1,7 @@
 #ifndef CHANNEL_H
 #define CHANNEL_H
 
-#include "pthread.h"
+#include <pthread.h>
 
 // A buffered channel.
 typedef struct {
