@@ -56,10 +56,12 @@ int find_codec_context(config *conf, AVFormatContext **p_fmt_ctxt,
         }
         switch (codec->type) {
             case AVMEDIA_TYPE_VIDEO:
+                avcodec_free_context(&v_cdc);
                 v_cdc = cdc;
                 *p_v_idx = i;
                 break;
             case AVMEDIA_TYPE_AUDIO:
+                avcodec_free_context(&a_cdc);
                 a_cdc = cdc;
                 *p_a_idx = i;
                 break;
