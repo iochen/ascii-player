@@ -1,4 +1,5 @@
 #include <libavcodec/avcodec.h>
+#include <libavcodec/version.h>
 #include <libavformat/avformat.h>
 #include <libavutil/error.h>
 #include <libavutil/imgutils.h>
@@ -18,16 +19,11 @@
 #include "config.h"
 #include "display.h"
 
+#define AUDIO_BUF_SIZE 512
+
 void print_help();
 void print_license();
-
-// TODO: Add log module
-// TODO: modulize some functions
-
-void handle_int(int dummy) {
-    endwin();
-    exit(0);
-}
+void handle_int(int _);
 
 int main(int argc, char *argv[]) {
     // Insucfficient program arguments.
@@ -36,24 +32,27 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
+    // Initialize ncurses window
     initscr();
 
+    // Set interrupt handler
     signal(SIGINT, handle_int);
 
     // Parse program arguments into config.
     config conf = parse_config(argc, argv);
 
+    // If --help
     if (conf.help) {
         endwin();
         print_help();
         return 0;
     }
+    // If --license
     if (conf.license) {
         endwin();
         print_license();
         return 0;
     }
-    // conf.height = conf.width = 100;
 
     // Create Audio and Video Fromat Context.
     AVFormatContext *fmt_ctxt = NULL;
@@ -69,7 +68,9 @@ int main(int argc, char *argv[]) {
         return err;
     }
 
+    // If no audio
     if (conf.no_audio) {
+        // Check if has FPS
         if (v_cdc->framerate.num == 0) {
             endwin();
             printf("Unknown FPS\n");
@@ -78,81 +79,95 @@ int main(int argc, char *argv[]) {
         conf.fps = (double)v_cdc->framerate.num / v_cdc->framerate.den;
     }
 
-    // Allocate AVPacket and AVFrame.
+    // Allocate AVPacket
     AVPacket *pckt = av_packet_alloc();
     if (!pckt) {
         printf("Unable to allocate AVPacket\n");
         return -2;
     }
+    // Allocate AVFrame
     AVFrame *frame = av_frame_alloc();
     if (!frame) {
         printf("Unable to allocate AVFrame\n");
         return -2;
     }
-    AVFrame *frame_grey = av_frame_alloc();
-    if (!frame_grey) {
+
+    // Allocate resized greyscale image frame
+    AVFrame *frame_greyscale = av_frame_alloc();
+    if (!frame_greyscale) {
         printf("Unable to allocate AVFrame for greyscale frame\n");
         return -2;
     }
-    frame_grey->width = conf.width;
-    frame_grey->height = conf.height;
-
+    // Initialize some fields in frame_grey
+    frame_greyscale->width = conf.width;
+    frame_greyscale->height = conf.height;
+    // Allocate image resize context
     struct SwsContext *sws_ctxt = sws_getContext(
-        v_cdc->width, v_cdc->height, v_cdc->pix_fmt, frame_grey->width,
-        frame_grey->height, AV_PIX_FMT_GRAY8, SWS_FAST_BILINEAR, 0, 0, 0);
+        v_cdc->width, v_cdc->height, v_cdc->pix_fmt, conf.width, conf.height,
+        AV_PIX_FMT_GRAY8, SWS_FAST_BILINEAR, 0, 0, 0);
 
-    conf.video_ch = alloc_channel(10);
-    // conf.audio_ch = alloc_channel(3);
-    pthread_t th_v;
-
-    AVFrame *audio_frame = av_frame_alloc();
-    if (!audio_frame) {
-        printf("Unable to allocate AVFrame for audio frame\n");
-        return -2;
-    }
+    // // Allocate resampled audio frame
+    // AVFrame *frame_resampled = av_frame_alloc();
+    // if (!frame_resampled) {
+    //     printf("Unable to allocate AVFrame for audio frame\n");
+    //     return -2;
+    // }
+    // // Initialize some fields in frame_resampled
+    // frame_resampled->channel_layout = AV_CH_LAYOUT_STEREO;
+    // frame_resampled->sample_rate = a_cdc->sample_rate;
+    // frame_resampled->format = AV_SAMPLE_FMT_FLT;
+    // Allocate audio resample context
     SwrContext *resample_ctxt = swr_alloc();
     if (!resample_ctxt) {
         printf("Unable to allocate AVAudioResampleContext\n");
         return -2;
     }
-    audio_frame->channel_layout = AV_CH_LAYOUT_STEREO;
-    audio_frame->sample_rate = a_cdc->sample_rate;
-    audio_frame->format = AV_SAMPLE_FMT_FLT;
 
+    // PortAudio Stream Params
     PaStreamParameters pa_stm_param;
+    // PortAudio Stream
     PaStream *stream;
+    // If need audio
     if (!conf.no_audio) {
+        // Initialize PortAudio
         err = Pa_Initialize();
         if (err != paNoError) {
             printf("PortAudio init error(code: %d).\n", err);
             return -20;
         }
+        // Get output device
         pa_stm_param.device = Pa_GetDefaultOutputDevice();
         if (pa_stm_param.device == paNoDevice) {
             printf("Can NOT find audio device.\n");
             return -20;
         }
+        // Initialize other fields in pa_stm_param
         pa_stm_param.sampleFormat = paFloat32;
         pa_stm_param.channelCount = 2;
         pa_stm_param.suggestedLatency =
             Pa_GetDeviceInfo(pa_stm_param.device)->defaultLowOutputLatency;
         pa_stm_param.hostApiSpecificStreamInfo = NULL;
-        err = Pa_OpenStream(&stream, NULL, /* no input */
-                            &pa_stm_param, a_cdc->sample_rate, 512,
-                            paClipOff, /* we won't output out of range samples
-                                          so don't bother clipping them */
-                            NULL, NULL);
+        // Open audio stream
+        err = Pa_OpenStream(&stream, NULL, &pa_stm_param, a_cdc->sample_rate,
+                            AUDIO_BUF_SIZE, paClipOff, NULL, NULL);
         if (err != paNoError) {
             printf("Error when opening audio stream.(code %d)\n", err);
             return -20;
         }
     }
 
-    int frame_count = 0, audio_count = 0;
+    // Allocate video channel
+    conf.video_ch = alloc_channel(10);
+
+    // Video thread
+    pthread_t th_v;
+
+    int image_count = 0, audio_count = 0;
     // While not the end of file.
     while (av_read_frame(fmt_ctxt, pckt) >= 0) {
         // If is video stream.
         if (pckt->stream_index == v_idx) {
+            // Send packet to video decoder
             err = avcodec_send_packet(v_cdc, pckt);
             if (err < 0) {
                 printf(
@@ -161,7 +176,9 @@ int main(int argc, char *argv[]) {
                     err);
                 return -10;
             }
+            // Read all frames from decoder
             while (1) {
+                // Receive frame
                 err = avcodec_receive_frame(v_cdc, frame);
                 if (err != 0) {
                     if (err == AVERROR(EAGAIN) || err == AVERROR_EOF) {
@@ -170,19 +187,23 @@ int main(int argc, char *argv[]) {
                     printf("Failed when decoding video(code: %d)\n", err);
                     return -5;
                 }
-                frame_grey->data[0] =
+                uint8_t *buf =
                     (uint8_t *)av_malloc(av_image_get_buffer_size(
                         AV_PIX_FMT_GRAY8, conf.width, conf.height, 1));
-                av_image_fill_arrays(frame_grey->data, frame_grey->linesize,
-                                     frame_grey->data[0], AV_PIX_FMT_GRAY8,
+                av_image_fill_arrays(frame_greyscale->data,
+                                     frame_greyscale->linesize,
+                                     buf, AV_PIX_FMT_GRAY8,
                                      conf.width, conf.height, 1);
+                // Scale raw image to target image
                 sws_scale(sws_ctxt, (const uint8_t *const *)frame->data,
-                          frame->linesize, 0, v_cdc->height, frame_grey->data,
-                          frame_grey->linesize);
-                add_element(conf.video_ch, frame_grey->data[0]);
-                av_frame_unref(frame_grey);
-                frame_count++;
-                if (frame_count == 1) {
+                          frame->linesize, 0, v_cdc->height,
+                          frame_greyscale->data, frame_greyscale->linesize);
+                // Add scaled data to video channel
+                add_element(conf.video_ch, buf);
+                // // Reset the frame fields.
+                // av_frame_unref(frame_greyscale);
+                // Start video thread
+                if (image_count++ == 1) {
                     pthread_create(&th_v, NULL, play_video, &conf);
                 }
             }
@@ -205,7 +226,17 @@ int main(int argc, char *argv[]) {
                     printf("Failed when decoding audio(code: %d)\n", err);
                     return -5;
                 }
-                err = swr_convert_frame(resample_ctxt, audio_frame, frame);
+                // Allocate resampled audio frame
+                AVFrame *frame_resampled = av_frame_alloc();
+                if (!frame_resampled) {
+                    printf("Unable to allocate AVFrame for audio frame\n");
+                    return -2;
+                }
+                // Initialize some fields in frame_resampled
+                frame_resampled->channel_layout = AV_CH_LAYOUT_STEREO;
+                frame_resampled->sample_rate = a_cdc->sample_rate;
+                frame_resampled->format = AV_SAMPLE_FMT_FLT;
+                err = swr_convert_frame(resample_ctxt, frame_resampled, frame);
                 if (err != 0) {
                     print_averror(err);
                     return -20;
@@ -217,23 +248,35 @@ int main(int argc, char *argv[]) {
                 if (audio_count == 1) {
                     Pa_StartStream(stream);
                 }
-                Pa_WriteStream(stream, audio_frame->data[0],
-                               audio_frame->nb_samples);
-                audio_frame->data[0] = NULL;
-                audio_frame->linesize[0] = 0;
+                Pa_WriteStream(stream, frame_resampled->data[0],
+                               frame_resampled->nb_samples);
+                av_frame_free(&frame_resampled);
             }
         }
         av_packet_unref(pckt);
         av_frame_unref(frame);
     }
+    endwin();
 
-    av_frame_free(&frame_grey);
+    sleep(1);
     av_frame_free(&frame);
+    av_frame_free(&frame_greyscale);
     av_packet_free(&pckt);
     avcodec_free_context(&a_cdc);
     avcodec_free_context(&v_cdc);
     avformat_free_context(fmt_ctxt);
+    sws_freeContext(sws_ctxt);
+    swr_free(&resample_ctxt);
+    free_channel(conf.audio_ch);
+    free_channel(conf.video_ch);
+    Pa_CloseStream(stream);
+}
+
+/// @brief Handle interrupt (^C)
+/// @param _
+void handle_int(int _) {
     endwin();
+    exit(0);
 }
 
 void print_help() {
