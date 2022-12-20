@@ -7,6 +7,7 @@
 #include "channel/channel.h"
 #include "config.h"
 #include "display.h"
+#include <libavutil/frame.h>
 #include <sys/time.h>
 
 
@@ -14,7 +15,7 @@
 
 void *play_video(void *arg) {
     config *conf = (config *)arg;
-    uint8_t *data = NULL;
+    unsigned char *data = NULL;
     int err;
 
     int dur_u = 1000000 / conf->fps;
@@ -27,7 +28,6 @@ void *play_video(void *arg) {
             printf("Error reading element(code: %d)\n", err);
             exit(2);
         }
-        // printf("Read data = %d\n", count);
         if (conf->no_audio) {
             struct timeval now;
             gettimeofday(&now, NULL);
@@ -45,7 +45,7 @@ void *play_video(void *arg) {
             addch('\n');
         }
         refresh();
-        av_free(data);
+        free(data);
     }
 }
 
