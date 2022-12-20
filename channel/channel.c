@@ -36,6 +36,9 @@ Channel *alloc_channel(int cap) {
 /// @brief Free Channel.
 /// @param ch Pointer to Channel.
 void free_channel(Channel *ch) {
+    if (!ch) {
+        return;
+    }
     // free buf
     free(ch->buf);
     // free ch
