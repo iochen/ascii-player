@@ -23,6 +23,7 @@ typedef struct {
 } arg_list;
 
 extern arg_list new_arg_list();
+extern void free_arg_list(arg_list *al);
 extern void arg_list_add(arg_list *al, arg_type type, char *name,
                          char short_name, char *description);
 extern arg *arg_list_search(arg_list *al, char *key);
