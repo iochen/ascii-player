@@ -59,6 +59,8 @@ config parse_config(int argc, char *argv[]) {
     if ((a = arg_list_search(&al, "license"))->set) conf.license = a->value.number; 
     if ((a = arg_list_search(&al, "cache"))->set) conf.cache = a->value.str; 
     if ((a = arg_list_search(&al, "no-audio"))->set) conf.no_audio = a->value.number; 
+
+    free_arg_list(&al);
     // endwin();
 
     // printf("help: %d\n", conf.help);

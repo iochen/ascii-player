@@ -19,6 +19,14 @@ void arg_list_add(arg_list *al, arg_type type, char *name, char short_name,
         (arg){name, short_name, description, 0, type, (arg_value)(char *)NULL};
 }
 
+extern void free_arg_list(arg_list *al) {
+    if (!al) {
+        return;
+    }
+    free(al->args);
+    al->args = NULL;
+}
+
 arg *arg_list_search(arg_list *al, char *key) {
     // validate params
     if (!key || !al) {
