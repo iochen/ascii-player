@@ -23,6 +23,7 @@
 
 void print_help();
 void print_license();
+// Handle interrupt (^C)
 void handle_int(int _);
 
 int main(int argc, char *argv[]) {
@@ -70,13 +71,16 @@ int main(int argc, char *argv[]) {
 
     // If no audio
     if (conf.no_audio) {
+        AVRational framerate = fmt_ctxt->streams[v_idx]->avg_frame_rate;
         // Check if has FPS
-        if (v_cdc->framerate.num == 0) {
+        if (framerate.num == 0) {
             endwin();
             printf("Unknown FPS\n");
             exit(-1);
+        } else {
+            // Calculate FPS
+            conf.fps = (double)framerate.num / framerate.den;
         }
-        conf.fps = (double)v_cdc->framerate.num / v_cdc->framerate.den;
     }
 
     // Allocate AVPacket
@@ -106,16 +110,12 @@ int main(int argc, char *argv[]) {
         v_cdc->width, v_cdc->height, v_cdc->pix_fmt, conf.width, conf.height,
         AV_PIX_FMT_GRAY8, SWS_FAST_BILINEAR, 0, 0, 0);
 
-    // // Allocate resampled audio frame
-    // AVFrame *frame_resampled = av_frame_alloc();
-    // if (!frame_resampled) {
-    //     printf("Unable to allocate AVFrame for audio frame\n");
-    //     return -2;
-    // }
-    // // Initialize some fields in frame_resampled
-    // frame_resampled->channel_layout = AV_CH_LAYOUT_STEREO;
-    // frame_resampled->sample_rate = a_cdc->sample_rate;
-    // frame_resampled->format = AV_SAMPLE_FMT_FLT;
+    // Allocate resampled audio frame
+    AVFrame *frame_resampled = av_frame_alloc();
+    if (!frame_resampled) {
+        printf("Unable to allocate AVFrame for audio frame\n");
+        return -2;
+    }
     // Allocate audio resample context
     SwrContext *resample_ctxt = swr_alloc();
     if (!resample_ctxt) {
@@ -187,27 +187,27 @@ int main(int argc, char *argv[]) {
                     printf("Failed when decoding video(code: %d)\n", err);
                     return -5;
                 }
-                uint8_t *buf =
-                    (uint8_t *)av_malloc(av_image_get_buffer_size(
-                        AV_PIX_FMT_GRAY8, conf.width, conf.height, 1));
-                av_image_fill_arrays(frame_greyscale->data,
-                                     frame_greyscale->linesize,
-                                     buf, AV_PIX_FMT_GRAY8,
-                                     conf.width, conf.height, 1);
+                // New buf
+                uint8_t *buf = (uint8_t *)av_malloc(av_image_get_buffer_size(
+                    AV_PIX_FMT_GRAY8, conf.width, conf.height, 1));
+                // Fill frame_greyscale
+                av_image_fill_arrays(
+                    frame_greyscale->data, frame_greyscale->linesize, buf,
+                    AV_PIX_FMT_GRAY8, conf.width, conf.height, 1);
                 // Scale raw image to target image
                 sws_scale(sws_ctxt, (const uint8_t *const *)frame->data,
                           frame->linesize, 0, v_cdc->height,
                           frame_greyscale->data, frame_greyscale->linesize);
                 // Add scaled data to video channel
                 add_element(conf.video_ch, buf);
-                // // Reset the frame fields.
-                // av_frame_unref(frame_greyscale);
-                // Start video thread
-                if (image_count++ == 1) {
+                // Reset the frame fields.
+                av_frame_unref(frame_greyscale);
+                if (++image_count == 1) {
                     pthread_create(&th_v, NULL, play_video, &conf);
                 }
             }
         } else if (!conf.no_audio && pckt->stream_index == a_idx) {
+            // Send packet to audio decoder
             err = avcodec_send_packet(a_cdc, pckt);
             if (err < 0) {
                 printf(
@@ -216,8 +216,9 @@ int main(int argc, char *argv[]) {
                     err);
                 return -10;
             }
+            // Read all frames from audio decoder
             while (1) {
-                audio_count++;
+                // Receive a frame from audio decoder
                 err = avcodec_receive_frame(a_cdc, frame);
                 if (err != 0) {
                     if (err == AVERROR(EAGAIN) || err == AVERROR_EOF) {
@@ -226,56 +227,71 @@ int main(int argc, char *argv[]) {
                     printf("Failed when decoding audio(code: %d)\n", err);
                     return -5;
                 }
-                // Allocate resampled audio frame
-                AVFrame *frame_resampled = av_frame_alloc();
-                if (!frame_resampled) {
-                    printf("Unable to allocate AVFrame for audio frame\n");
-                    return -2;
-                }
+                // Unref last frame info (important!)
+                av_frame_unref(frame_resampled);
                 // Initialize some fields in frame_resampled
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
                 frame_resampled->channel_layout = AV_CH_LAYOUT_STEREO;
+#pragma clang diagnostic pop
                 frame_resampled->sample_rate = a_cdc->sample_rate;
                 frame_resampled->format = AV_SAMPLE_FMT_FLT;
+                // Resample audio data
                 err = swr_convert_frame(resample_ctxt, frame_resampled, frame);
                 if (err != 0) {
                     print_averror(err);
                     return -20;
                 }
-                // APAudioData *apad = (APAudioData
-                // *)malloc(sizeof(APAudioData)); apad->nb_samples =
-                // audio_frame->nb_samples; apad->data = (float *)
-                // audio_frame->data[0];
-                if (audio_count == 1) {
+                if (++audio_count == 1) {
                     Pa_StartStream(stream);
                 }
+                // Write data into stream
                 Pa_WriteStream(stream, frame_resampled->data[0],
                                frame_resampled->nb_samples);
-                av_frame_free(&frame_resampled);
             }
         }
+        // Unref packet
         av_packet_unref(pckt);
+        // Unref decode frame
         av_frame_unref(frame);
     }
-    endwin();
 
+    // Wait for video cahnnel empty
+    // TODO: use pthread_cond instead of sleep
     sleep(1);
+
+    // Exit ncurses mode
+    endwin();
+    // Free decode frame
     av_frame_free(&frame);
+    // Free greyscale frame
     av_frame_free(&frame_greyscale);
+    // Free packet
     av_packet_free(&pckt);
+    // Free audio coDec context
     avcodec_free_context(&a_cdc);
+    // Free video coDec context
     avcodec_free_context(&v_cdc);
+    // Free format context
     avformat_free_context(fmt_ctxt);
+    // Free image scale context
     sws_freeContext(sws_ctxt);
+    // Free audio resample context
     swr_free(&resample_ctxt);
-    free_channel(conf.audio_ch);
+    // Free video channel
     free_channel(conf.video_ch);
+    // Free resampled frame
+    av_frame_free(&frame_resampled);
+    // Close PortAudio stream
     Pa_CloseStream(stream);
 }
 
 /// @brief Handle interrupt (^C)
 /// @param _
 void handle_int(int _) {
+    // Exit ncurses mode
     endwin();
+    // Exit program
     exit(0);
 }
 
