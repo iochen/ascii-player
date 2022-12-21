@@ -1,13 +1,14 @@
+#include "display.h"
+
+#include <libavutil/frame.h>
 #include <ncurses.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/time.h>
 #include <unistd.h>
+
 #include "channel/channel.h"
 #include "config.h"
-#include "display.h"
-#include <libavutil/frame.h>
-#include <sys/time.h>
-
 
 #define DP_MIN(A, B) ((A) < (B) ? (A) : (B))
 
@@ -29,7 +30,9 @@ void *play_video(void *arg) {
         if (conf->no_audio) {
             struct timeval now;
             gettimeofday(&now, NULL);
-            int pause_dur_u = dur_u * count - (now.tv_sec - start.tv_sec) * 1000000 - (now.tv_usec - start.tv_usec);
+            int pause_dur_u = dur_u * count -
+                              (now.tv_sec - start.tv_sec) * 1000000 -
+                              (now.tv_usec - start.tv_usec);
             if (pause_dur_u > 0) {
                 usleep(pause_dur_u);
             }
@@ -58,23 +61,24 @@ void *play_video(void *arg) {
 //                 static float *last_ptr = NULL;
 //                 static float *last_buf = NULL;
 //                 static unsigned long last_remain = 0;
-                
+
 //                 float *out = (float *)output;
-                
+
 //                 while(frameCount > 0) {
 //                     if (last_remain == 0) {
 //                         free(last_buf);
 //                         APAudioData *apad;
-//                         int err = read_element(conf->audio_ch, (void **)&apad);
-//                         if (err != 0) {
+//                         int err = read_element(conf->audio_ch, (void
+//                         **)&apad); if (err != 0) {
 //                             printf("Error!!!!!(code: %d)\n", err);
 //                         }
 //                         last_ptr = last_buf = apad->data;
 //                         last_remain = apad->nb_samples;
 //                         free(apad);
 //                     }
-//                     unsigned long to_be_read = DP_MIN(last_remain, frameCount);
-//                     for (unsigned long i = 0; i < to_be_read * 2; i++) {
+//                     unsigned long to_be_read = DP_MIN(last_remain,
+//                     frameCount); for (unsigned long i = 0; i < to_be_read *
+//                     2; i++) {
 //                         *out++ = *last_ptr++;
 //                     }
 //                     last_remain -= to_be_read;
@@ -82,9 +86,11 @@ void *play_video(void *arg) {
 //                 }
 
 //                 // if (last_buf) {
-//                 //     unsigned long to_be_read = DP_MIN(last_remain, frameCount);
+//                 //     unsigned long to_be_read = DP_MIN(last_remain,
+//                 frameCount);
 //                 //     for (unsigned long i = 0; i < to_be_read * 2; i++) {
-//                 //         *out++ = last_buf[(nb_samples - last_remain) * 2 + i];
+//                 //         *out++ = last_buf[(nb_samples - last_remain) * 2 +
+//                 i];
 //                 //     }
 //                 //     last_remain -= to_be_read;
 //                 //     frameCount -= to_be_read;
@@ -95,11 +101,13 @@ void *play_video(void *arg) {
 //                 // }
 //                 // if (frameCount > 0) {
 //                 //         float *buf = NULL;
-//                 //         int err = read_element(conf->audio_ch, (void **)&buf);
+//                 //         int err = read_element(conf->audio_ch, (void
+//                 **)&buf);
 //                 //         if (err != 0) {
 //                 //             printf("Error!!!!!(code: %d)\n", err);
 //                 //         }
-//                 //         for (unsigned long i = 0; i < frameCount * 2; i++) {
+//                 //         for (unsigned long i = 0; i < frameCount * 2; i++)
+//                 {
 //                 //             *out++ = buf[i];
 //                 //         }
 //                 //         last_buf = buf;

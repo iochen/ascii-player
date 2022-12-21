@@ -1,9 +1,10 @@
 #include "config.h"
 
+#include <ncurses.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <ncurses.h>
 #include <string.h>
+
 #include "args/args.h"
 
 static char *str_rev(char *str) {
@@ -27,7 +28,7 @@ static config default_config() {
     getmaxyx(stdscr, conf.height, conf.width);
     conf.width--;
     char s[] = " .:-=+*#%@";
-    strcpy(conf.grey_ascii,s);
+    strcpy(conf.grey_ascii, s);
     conf.grey_ascii_step = (strlen(conf.grey_ascii) - 1) / 255.0;
     conf.video_ch = NULL;
     conf.audio_ch = NULL;
@@ -45,9 +46,12 @@ config parse_config(int argc, char *argv[]) {
     arg_list al = new_arg_list();
 
     arg_list_add(&al, ARG_TYPE_FLAG, "help", 'h', "Print this help page");
-    arg_list_add(&al, ARG_TYPE_FLAG, "license", 'l', "Show license and author info");
-    arg_list_add(&al, ARG_TYPE_STRING, "cache", 'c', "Process video into a cached file");
-    arg_list_add(&al, ARG_TYPE_FLAG, "no-audio", 'n', "Play video without playing audio");
+    arg_list_add(&al, ARG_TYPE_FLAG, "license", 'l',
+                 "Show license and author info");
+    arg_list_add(&al, ARG_TYPE_STRING, "cache", 'c',
+                 "Process video into a cached file");
+    arg_list_add(&al, ARG_TYPE_FLAG, "no-audio", 'n',
+                 "Play video without playing audio");
     int err = parse_args(&al, argc, argv);
     if (err < 0) {
         printf("Arg error: %d %s\n", err, parse_args_err(err));
@@ -55,10 +59,12 @@ config parse_config(int argc, char *argv[]) {
     }
 
     arg *a;
-    if ((a = arg_list_search(&al, "help"))->set) conf.help = a->value.number; 
-    if ((a = arg_list_search(&al, "license"))->set) conf.license = a->value.number; 
-    if ((a = arg_list_search(&al, "cache"))->set) conf.cache = a->value.str; 
-    if ((a = arg_list_search(&al, "no-audio"))->set) conf.no_audio = a->value.number; 
+    if ((a = arg_list_search(&al, "help"))->set) conf.help = a->value.number;
+    if ((a = arg_list_search(&al, "license"))->set)
+        conf.license = a->value.number;
+    if ((a = arg_list_search(&al, "cache"))->set) conf.cache = a->value.str;
+    if ((a = arg_list_search(&al, "no-audio"))->set)
+        conf.no_audio = a->value.number;
 
     free_arg_list(&al);
     // endwin();
@@ -70,4 +76,3 @@ config parse_config(int argc, char *argv[]) {
     // exit(0);
     return conf;
 }
-
