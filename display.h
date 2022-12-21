@@ -10,6 +10,12 @@ typedef struct {
     float *data;
 } APAudioData;
 
+typedef struct {
+    int ts_u;
+    unsigned char *data;
+} APVideoData;
+
+
 
 void *play_video(void *arg);
 
