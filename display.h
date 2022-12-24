@@ -5,6 +5,7 @@
 
 #include "channel/channel.h"
 #include "config.h"
+#include "apcache.h"
 
 // typedef struct {
 //     int nb_samples;
@@ -17,6 +18,8 @@
 // } APVideoData;
 
 void *play_video(void *arg);
+
+int play_from_cache(config conf);
 
 int audio_callback(const void *input, void *output, unsigned long frameCount,
                    const PaStreamCallbackTimeInfo *timeInfo,

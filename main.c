@@ -14,6 +14,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "apcache.h"
 #include "av.h"
 #include "channel/channel.h"
 #include "config.h"
@@ -42,6 +43,8 @@ int main(int argc, char *argv[]) {
     // Parse program arguments into config.
     config conf = parse_config(argc, argv);
 
+    // conf.width = conf.height = 100;
+
     // If --help
     if (conf.help) {
         endwin();
@@ -53,6 +56,15 @@ int main(int argc, char *argv[]) {
         endwin();
         print_license();
         return 0;
+    }
+
+    int fn_len = strlen(conf.filename);
+    if (fn_len > 8) {
+        if (strcmp(conf.filename + fn_len - 8, ".apcache") == 0 &&
+            is_apcache(conf.filename) == 0) {
+            int err = play_from_cache(conf);
+            return err;
+        }
     }
 
     // Create Audio and Video Fromat Context.
@@ -127,8 +139,8 @@ int main(int argc, char *argv[]) {
     PaStreamParameters pa_stm_param;
     // PortAudio Stream
     PaStream *stream;
-    // If need audio
-    if (!conf.no_audio) {
+    // If need audio and not cache
+    if (!conf.no_audio && !conf.cache) {
         // Initialize PortAudio
         err = Pa_Initialize();
         if (err != paNoError) {
@@ -156,11 +168,32 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // Allocate video channel
-    conf.video_ch = alloc_channel(10);
+    if (!conf.cache) {
+        // Allocate video channel
+        conf.video_ch = alloc_channel(10);
+    }
 
     // Video thread
     pthread_t th_v;
+
+    APCache *apc = NULL;
+
+    if (conf.cache) {
+        apc = apcache_alloc();
+        if (!apc) {
+            printf("Cannot allocate APCache\n");
+            return -33;
+        }
+        apc->fps = conf.fps;
+        apc->width = conf.width;
+        apc->height = conf.height;
+        apc->sample_rate = conf.no_audio ? 0 : a_cdc->sample_rate;
+        apc->file = fopen(conf.cache, "w");
+        if ((err = apcache_create(apc)) != 0) {
+            printf("Error when creating apcache file. (code: %d)\n", err);
+            return -33;
+        }
+    }
 
     int image_count = 0, audio_count = 0;
     // While not the end of file.
@@ -187,9 +220,10 @@ int main(int argc, char *argv[]) {
                     printf("Failed when decoding video(code: %d)\n", err);
                     return -5;
                 }
+                int buf_size = av_image_get_buffer_size(
+                    AV_PIX_FMT_GRAY8, conf.width, conf.height, 1);
                 // New buf
-                uint8_t *buf = (uint8_t *)av_malloc(av_image_get_buffer_size(
-                    AV_PIX_FMT_GRAY8, conf.width, conf.height, 1));
+                uint8_t *buf = (uint8_t *)av_malloc(buf_size);
                 // Fill frame_greyscale
                 av_image_fill_arrays(
                     frame_greyscale->data, frame_greyscale->linesize, buf,
@@ -198,11 +232,30 @@ int main(int argc, char *argv[]) {
                 sws_scale(sws_ctxt, (const uint8_t *const *)frame->data,
                           frame->linesize, 0, v_cdc->height,
                           frame_greyscale->data, frame_greyscale->linesize);
-                // Add scaled data to video channel
-                add_element(conf.video_ch, buf);
+
+                if (conf.cache) {
+                    APFrame apf;
+                    apf.type = APAV_VIDEO;
+                    apf.bsize = buf_size;
+                    apf.data = buf;
+                    if ((err = apcache_write_frame(apc, &apf)) != 0) {
+                        printf(
+                            "Error when writing video frame to cache file. "
+                            "(code: %d)\n",
+                            err);
+                        return -33;
+                    }
+                    clear();
+                    printw("Writing frame: %d. (video)\n", image_count);
+                    refresh();
+
+                } else {
+                    // Add scaled data to video channel
+                    add_element(conf.video_ch, buf);
+                }
                 // Reset the frame fields.
                 av_frame_unref(frame_greyscale);
-                if (++image_count == 1) {
+                if (++image_count == 1 && !conf.cache) {
                     pthread_create(&th_v, NULL, play_video, &conf);
                 }
             }
@@ -242,12 +295,29 @@ int main(int argc, char *argv[]) {
                     print_averror(err);
                     return -20;
                 }
-                if (++audio_count == 1) {
+                if (++audio_count == 1 && !conf.cache) {
                     Pa_StartStream(stream);
                 }
-                // Write data into stream
-                Pa_WriteStream(stream, frame_resampled->data[0],
-                               frame_resampled->nb_samples);
+                if (conf.cache) {
+                    APFrame apf;
+                    apf.type = APAV_AUDIO;
+                    apf.bsize = frame_resampled->nb_samples * 2 * sizeof(float);
+                    apf.data = frame_resampled->data[0];
+                    if ((err = apcache_write_frame(apc, &apf)) != 0) {
+                        printf(
+                            "Error when writing audio frame to cache file. "
+                            "(code: %d)\n",
+                            err);
+                        return -33;
+                    }
+                    clear();
+                    printw("Writing frame: %d. (audio)\n", image_count);
+                    refresh();
+                } else {
+                    // Write data into stream
+                    Pa_WriteStream(stream, frame_resampled->data[0],
+                                   frame_resampled->nb_samples);
+                }
             }
         }
         // Unref packet
@@ -284,6 +354,8 @@ int main(int argc, char *argv[]) {
     av_frame_free(&frame_resampled);
     // Close PortAudio stream
     Pa_CloseStream(stream);
+    apcache_close(apc);
+    apcache_free(&apc);
 }
 
 /// @brief Handle interrupt (^C)

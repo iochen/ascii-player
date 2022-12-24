@@ -11,6 +11,7 @@
 #include "config.h"
 
 #define DP_MIN(A, B) ((A) < (B) ? (A) : (B))
+#define CACHE_AUDIO_BUF_SIZE 512
 
 void *play_video(void *arg) {
     config *conf = (config *)arg;
@@ -116,3 +117,93 @@ void *play_video(void *arg) {
 //                 return paContinue;
 
 // };
+
+int play_from_cache(config conf) {
+    APCache *apc = NULL;
+    int err;
+    if ((err = apcache_open(conf.filename, &apc)) != 0) {
+        printf("Error when open file. (code: %d)\n", err);
+        return -1;
+    }
+    conf.fps = apc->fps;
+    conf.no_audio = !apc->sample_rate;
+    conf.width = apc->width;
+    conf.height = apc->height;
+
+    // PortAudio Stream Params
+    PaStreamParameters pa_stm_param;
+    // PortAudio Stream
+    PaStream *stream;
+    // If need audio and not cache
+    if (!conf.no_audio) {
+        // Initialize PortAudio
+        err = Pa_Initialize();
+        if (err != paNoError) {
+            printf("PortAudio init error(code: %d).\n", err);
+            return -20;
+        }
+        // Get output device
+        pa_stm_param.device = Pa_GetDefaultOutputDevice();
+        if (pa_stm_param.device == paNoDevice) {
+            printf("Can NOT find audio device.\n");
+            return -20;
+        }
+        // Initialize other fields in pa_stm_param
+        pa_stm_param.sampleFormat = paFloat32;
+        pa_stm_param.channelCount = 2;
+        pa_stm_param.suggestedLatency =
+            Pa_GetDeviceInfo(pa_stm_param.device)->defaultLowOutputLatency;
+        pa_stm_param.hostApiSpecificStreamInfo = NULL;
+        // Open audio stream
+        err = Pa_OpenStream(&stream, NULL, &pa_stm_param, apc->sample_rate,
+                            CACHE_AUDIO_BUF_SIZE, paClipOff, NULL, NULL);
+        if (err != paNoError) {
+            printf("Error when opening audio stream.(code %d)\n", err);
+            return -20;
+        }
+    }
+
+    // Allocate video channel
+    conf.video_ch = alloc_channel(10);
+
+    // Video thread
+    pthread_t th_v;
+
+    int image_count = 0, audio_count = 0;
+    APFrame *apf = NULL;
+    // While not the end of file.
+    while ((err = apcache_read_frame(apc, &apf)) == 0) {
+        if (apf->type == APAV_VIDEO) {
+            add_element(conf.video_ch, apf->data);
+            apf->data = NULL;
+            if (++image_count == 1) {
+                pthread_create(&th_v, NULL, play_video, &conf);
+            }
+        } else if (apf->type == APAV_AUDIO) {
+                if (++audio_count == 1) {
+                    Pa_StartStream(stream);
+                }
+                    // Write data into stream
+                    Pa_WriteStream(stream, apf->data,
+                                   apf->bsize / (2 * sizeof(float)));
+            }
+    }
+    if (err != 0 && err != APCACHE_ERR_EOF) {
+        printf("Error when reading frame: %d\n", err);
+        return -1;
+    }
+
+    // Wait for video cahnnel empty
+    // TODO: use pthread_cond instead of sleep
+    sleep(1);
+        endwin();
+
+    // Free video channel
+    free_channel(conf.video_ch);
+    av_frame_free(&apf);
+    // Close PortAudio stream
+    Pa_CloseStream(stream);
+    apcache_close(apc);
+    apcache_free(&apc);
+    return 0;
+}
