@@ -12,21 +12,17 @@ ASCII Player is a player that plays video files with ASCII characters (greyscale
 ## Installation
 ### Linux
 #### Manually with Package Manager
-1. Clone the project.
-2. Install building tools:
-    - `make`
-    - `clang`
-3. Install libraries:
-    - `libavcodec-dev`
-    - `libavformat-dev`
-    - `libavdevice-dev`
-    - `libswresample-dev`
-    - `libswscale-dev`
-    - `libavutil-dev`
-    - `libz-dev`
-    - `libbz2-dev`
-    - `libncurses-dev`
-    - `libportaudio2-dev`
+This is an example for Debian Linux.   
+Audio playing is not tested.
+1. Install building tools:
+    ```shell
+    $ apt install git make clang
+    ```
+2. Install libraries:
+    ```shell
+    $ apt install libavcodec-dev libavformat-dev libavdevice-dev libswresample-dev libswscale-dev libavutil-dev libz-dev libbz2-dev libncurses-dev libasound-dev portaudio19-dev libportaudio2 
+    ```
+3. Clone the project.
 4. Build with `make`.
 5. Find the executable file in `build/asciiplayer`.
 ### macOS
@@ -39,9 +35,11 @@ ASCII Player is a player that plays video files with ASCII characters (greyscale
 5. Find the executable file in `build/asciiplayer`.
 
 ### Docker
-Under testing...
+Under testing...   
+PR is welcome!
+
 ### Windows
-Not tested yet...
+PR is welcome!
 
 ## Usage
 ### Directly play a video or a cache file
@@ -66,4 +64,5 @@ Usage: asciiplayer <file> [-h | --help] [-l | --license] [--cache <file>]
 ```
 
 ## License
-This project is under the GNU General Public License (Version 3) or GPLv3 License. View [LICENSE](LICENSE) file for more detailed information.
+This project is under the GNU General Public License (Version 3) or GPLv3 License.   
+View [LICENSE](LICENSE) file for more detailed information.
