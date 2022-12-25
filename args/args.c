@@ -46,7 +46,7 @@ arg *arg_list_search(arg_list *al, char *key) {
     }
 
     for (int i = 0; i < len; i++) {
-        if (al->args[i].short_name == key[0] ||
+        if ((key_len == 1 && al->args[i].short_name == key[0]) ||
             strcasecmp(al->args[i].name, key) == 0) {
             return &al->args[i];
         }
@@ -64,6 +64,9 @@ int parse_args(arg_list *al, int argc, char *argv[]) {
     for (int i = 0; i < argc; i++) {
         if (argv[i][0] == '-') {
             arg *ag = arg_list_search(al, argv[i]);
+            if (!ag) {
+                continue;
+            }
             // if arg type is a flag
             if (ag->type == ARG_TYPE_FLAG) {
                 // if has value
