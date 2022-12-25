@@ -1,65 +1,94 @@
 #include "log.h"
-#include <stdio.h>
+
+#include <ncurses.h>
+#include <stdarg.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
-static Logger default_logger = {NULL, LL_WARN, 1, 1, 1, 1, 1};
+static Logger default_logger = {NULL, LL_WARN, 1, 1,
+                                1,    1,       1, PTHREAD_MUTEX_INITIALIZER};
 
-extern void logger_init(){
-    Logger logger_init={stderr,LL_WARN,1,1,1,1,1};
+static const char *LogLevelStr[] = {"TRACE", "DEBUG", "INFO",
+                                    "WARN",  "ERROR", "FATAL"};
+
+void logger_init() {
+    default_logger =
+        (Logger){stderr, LL_WARN, 1, 1, 1, 1, 1, PTHREAD_MUTEX_INITIALIZER};
 }
 
-Logger logger_get_default(){
-    return default_logger;
+Logger logger_get_default() { return default_logger; }
+
+void logger_set_default(const Logger logger) { default_logger = logger; }
+
+extern void logger_log_code(Logger *logger, LogLevel ll, int err_code,
+                            char *filename, int linenum, char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    logger_log_code_va_list(logger, ll, err_code, filename, linenum, fmt, ap);
+    va_end(ap);
 }
 
-void logger_set_default(const Logger logger){
-    Logger *p;
-    *p=logger;
-    p->file=logger_get_default().file;
-    p->log_level=logger_get_default().log_level;
-    p->has_color=logger_get_default().has_color;
-    p->has_date=logger_get_default().has_date;
-    p->has_filename=logger_get_default().has_filename;
-    p->has_linenum=logger_get_default().has_linenum;
-    p->has_time=logger_get_default().has_time;
+extern void logger_log_code_default(LogLevel ll, int err_code, char *filename,
+                                    int linenum, char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    logger_log_code_va_list(&default_logger, ll, err_code, filename, linenum,
+                            fmt, ap);
+    va_end(ap);
 }
 
+void logger_log_code_va_list(Logger *logger, LogLevel ll, int err_code,
+                             char *filename, int linenum, char *fmt,
+                             va_list ap) {
+    if (!logger || !logger->file) {
+        return;
+    }
+    if (ll < logger->log_level) {
+        return;
+    }
+    pthread_mutex_lock(&logger->lock);
 
-extern void logger_log_code(Logger logger, LogLevel ll, int err_code,
-                            char *filename, int linenum, ...){
-FILE *fp;
-time_t now_time;
-time(&now_time);
+    time_t now;
+    struct tm now_info;
+    now = time(&now);
+    localtime_r(&now, &now_info);
 
-if(ll==default_logger.log_level){
-    if((fp=fopen(logger.file,"r+"))==NULL)
-    printf("File open error");
-    else 
-    fprintf(fp,"[%s] WARN %d:%d:...",ctime(&now_time),logger.has_filename,logger.has_linenum);
-    fclose(fp);
+    char buf[32];
+    int buf_len = 0;
+    buf[buf_len++] = '[';
+    if (logger->has_date) {
+        sprintf(buf + buf_len, "%04d-%02d-%02d", now_info.tm_year + 1900,
+                now_info.tm_mon + 1, now_info.tm_mday);
+        buf_len += 10;
+    }
+    if (logger->has_date && logger->has_time) {
+        buf[buf_len++] = ' ';
+    }
+    if (logger->has_time) {
+        sprintf(buf + buf_len, "%02d:%02d:%02d", now_info.tm_hour,
+                now_info.tm_min, now_info.tm_sec);
+        buf_len += 8;
+    }
+    buf[buf_len++] = ']';
+    sprintf(buf + buf_len, " %5s ", LogLevelStr[ll]);
+    buf_len += 7;
+    fwrite(buf, buf_len, 1, logger->file);
+
+    if (logger->has_filename) {
+        fputs(filename, logger->file);
+        if (logger->has_linenum) {
+            fprintf(logger->file, ":%d", linenum);
+        }
+    }
+    fputs(": ", logger->file);
+    vfprintf(logger->file, fmt, ap);
+    fputc('\n', logger->file);
+    fflush(logger->file);
+    pthread_mutex_unlock(&logger->lock);
+    if (ll == LL_FATAL) {
+        endwin();
+        exit(err_code);
+    }
 }
-
-if(ll==default_logger.log_level+1){
-    if((fp=fopen(logger.file,"r+"))==NULL)
-    printf("File open error");
-    else 
-    fprintf(fp,"[%s] ERROR %d:%d:...",ctime(&now_time),logger.has_filename,logger.has_linenum);
-    fclose(fp);
-}
-
-if(ll==default_logger.log_level+2){
-    if((fp=fopen(logger.file,"r+"))==NULL)
-    printf("File open error");
-    else 
-    fprintf(fp,"[%s] FATAL %d:%d:...",ctime(&now_time),logger.has_filename,logger.has_linenum);
-    fclose(fp);
-    exit(err_code);
-}
-                            }
-
-extern void logger_log_code_default(LogLevel ll, int err_code,
-                            char *filename, int linenum, ...){
-logger_log_code(default_logger,ll,err_code,filename,linenum);
-                            }
-
