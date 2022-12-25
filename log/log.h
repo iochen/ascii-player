@@ -60,17 +60,17 @@ extern void logger_log_code_default(LogLevel ll, int err_code,
 #define logger_log_default(ll, filename, linenum, fmt, ...) \
     logger_log_code_default(ll, LOG_DEFAULT_CODE, filename, linenum, fmt, ## __VA_ARGS__)
 
-#define fatal(err_code, fmt, ...) \
+#define lfatal(err_code, fmt, ...) \
     logger_log_code_default(LL_FATAL, err_code, __FILE__, __LINE__, fmt, ## __VA_ARGS__);
-#define error(fmt, ...) \
+#define lerror(fmt, ...) \
     logger_log_default(LL_ERROR, __FILE__, __LINE__, fmt, ## __VA_ARGS__)
-#define warn(fmt, ...) \
+#define lwarn(fmt, ...) \
     logger_log_default(LL_WARN, __FILE__, __LINE__, fmt, ## __VA_ARGS__)
-#define info(fmt, ...) \
+#define linfo(fmt, ...) \
     logger_log_default(LL_INFO, __FILE__, __LINE__, fmt, ## __VA_ARGS__)
-#define debug(fmt, ...) \
+#define ldebug(fmt, ...) \
     logger_log_default(LL_DEBUG, __FILE__, __LINE__, fmt, ## __VA_ARGS__)
-#define trace(fmt, ...) \
+#define ltrace(fmt, ...) \
     logger_log_default(LL_TRACE, __FILE__, __LINE__, fmt, ## __VA_ARGS__)
 
 #define log_fatal(logger, err_code, fmt, ...) \
