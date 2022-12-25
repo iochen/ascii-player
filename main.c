@@ -21,7 +21,8 @@
 #include "display.h"
 #include "log/log.h"
 
-#define AUDIO_BUF_SIZE 512
+// https://stackoverflow.com/questions/35446049/port-audio-causing-loud-buzzing-50-of-tests
+#define AUDIO_BUF_SIZE 1024
 
 static void print_help();
 static void print_license();
@@ -102,18 +103,16 @@ int main(int argc, char *argv[]) {
 
     ldebug("No audio");
     // If no audio
-    if (conf.no_audio) {
-        ltrace("Getting framerate...");
-        AVRational framerate = fmt_ctxt->streams[v_idx]->avg_frame_rate;
-        // Check if has FPS
-        if (framerate.num == 0) {
-            endwin();
-            printf("Unknown FPS! Exiting...\n");
-            lfatal(-1, "Unknown FPS");
-        } else {
-            // Calculate FPS
-            conf.fps = (double)framerate.num / framerate.den;
-        }
+    ltrace("Getting framerate...");
+    AVRational framerate = fmt_ctxt->streams[v_idx]->avg_frame_rate;
+    // Check if has FPS
+    if (framerate.num == 0 && conf.no_audio) {
+        endwin();
+        printf("Unknown FPS! Exiting...\n");
+        lfatal(-1, "Unknown FPS");
+    } else {
+        // Calculate FPS
+        conf.fps = (double)framerate.num / framerate.den;
     }
 
     // Allocate AVPacket
@@ -205,6 +204,10 @@ int main(int argc, char *argv[]) {
         ltrace("Allocating video channel");
         // Allocate video channel
         conf.video_ch = alloc_channel(10);
+        conf.video_ch->drain_callback.callback = video_drain_callback;
+        conf.video_ch->add_callback.callback = video_add_callback;
+        conf.video_ch->drain_callback.arg = &conf.video_ch_status;
+        conf.video_ch->add_callback.arg = &conf.video_ch_status;
     }
 
     // Video thread
@@ -249,9 +252,9 @@ int main(int argc, char *argv[]) {
                     "decoder. (code: %d)\n",
                     err);
                 lfatal(-10,
-                      "Error when supplying raw packet data as input to video "
-                      "decoder. (code: %d)",
-                      err);
+                       "Error when supplying raw packet data as input to video "
+                       "decoder. (code: %d)",
+                       err);
             }
             // Read all frames from decoder
             while (1) {
@@ -290,9 +293,9 @@ int main(int argc, char *argv[]) {
                             "(code: %d)\n",
                             err);
                         lfatal(-10,
-                              "Error when writing video frame to cache file. "
-                              "(code: %d)",
-                              err);
+                               "Error when writing video frame to cache file. "
+                               "(code: %d)",
+                               err);
                     }
                     free(buf);
                     clear();
@@ -319,9 +322,9 @@ int main(int argc, char *argv[]) {
                     "decoder. (code: %d)\n",
                     err);
                 lfatal(-10,
-                      "Error when supplying raw packet data as input to audio "
-                      "decoder. (code: %d)",
-                      err);
+                       "Error when supplying raw packet data as input to audio "
+                       "decoder. (code: %d)",
+                       err);
             }
             // Read all frames from audio decoder
             while (1) {
@@ -350,7 +353,7 @@ int main(int argc, char *argv[]) {
                     endwin();
                     print_averror(err);
                     lfatal(-10, "Error when resampling audio data. (code: %d)",
-                          err);
+                           err);
                 }
                 if (++audio_count == 1 && !conf.cache) {
                     ltrace("Starting audio stream...");
@@ -368,9 +371,9 @@ int main(int argc, char *argv[]) {
                             "(code: %d)\n",
                             err);
                         lfatal(-10,
-                              "Error when writing audio frame to cache file. "
-                              "(code: %d)",
-                              err);
+                               "Error when writing audio frame to cache file. "
+                               "(code: %d)",
+                               err);
                     }
                     clear();
                     printw("Writing frame: %d. (audio)\n", image_count);
@@ -388,9 +391,10 @@ int main(int argc, char *argv[]) {
         av_frame_unref(frame);
     }
 
-    // Wait for video cahnnel empty
-    // TODO: use pthread_cond instead of sleep
-    sleep(1);
+    pthread_mutex_lock(&conf.video_ch_status.lock);
+    if (conf.video_ch_status.has_data)
+        pthread_cond_wait(&conf.video_ch_status.drain_cond, &conf.video_ch_status.lock);
+    pthread_mutex_unlock(&conf.video_ch_status.lock);
 
     // Exit ncurses mode
     endwin();
@@ -404,6 +408,7 @@ int main(int argc, char *argv[]) {
     avcodec_free_context(&a_cdc);
     // Free video coDec context
     avcodec_free_context(&v_cdc);
+    avformat_close_input(&fmt_ctxt);
     // Free format context
     avformat_free_context(fmt_ctxt);
     // Free image scale context
@@ -414,8 +419,12 @@ int main(int argc, char *argv[]) {
     free_channel(conf.video_ch);
     // Free resampled frame
     av_frame_free(&frame_resampled);
+    // // To avoid noise at the end of the video
+    // usleep(100000);
+    Pa_StopStream(stream);
     // Close PortAudio stream
     Pa_CloseStream(stream);
+    Pa_Terminate();
     apcache_close(apc);
     apcache_free(&apc);
     if (logger_get_default().file) fclose(logger_get_default().file);

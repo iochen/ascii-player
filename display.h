@@ -17,12 +17,17 @@
 //     unsigned char *data;
 // } APVideoData;
 
+
 void *play_video(void *arg);
 
 int play_from_cache(config conf);
 
-int audio_callback(const void *input, void *output, unsigned long frameCount,
-                   const PaStreamCallbackTimeInfo *timeInfo,
-                   PaStreamCallbackFlags statusFlags, void *userData);
+// int audio_callback(const void *input, void *output, unsigned long frameCount,
+//                    const PaStreamCallbackTimeInfo *timeInfo,
+//                    PaStreamCallbackFlags statusFlags, void *userData);
+
+void video_drain_callback(void *arg);
+
+void video_add_callback(void *arg);
 
 #endif

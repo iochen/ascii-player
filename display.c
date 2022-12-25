@@ -12,7 +12,9 @@
 #include "log/log.h"
 
 #define DP_MIN(A, B) ((A) < (B) ? (A) : (B))
-#define CACHE_AUDIO_BUF_SIZE 512
+
+// https://stackoverflow.com/questions/35446049/port-audio-causing-loud-buzzing-50-of-tests
+#define CACHE_AUDIO_BUF_SIZE 1024
 
 void *play_video(void *arg) {
     config *conf = (config *)arg;
@@ -116,8 +118,22 @@ void *play_video(void *arg) {
 //                 //         last_remain = nb_samples - frameCount;
 //                 // }
 //                 return paContinue;
-
 // };
+
+void video_drain_callback(void *arg) {
+    ChannelStatus *cs = arg;
+    pthread_mutex_lock(&cs->lock);
+    cs->has_data = 0;
+    pthread_mutex_unlock(&cs->lock);
+    pthread_cond_signal(&cs->drain_cond);
+}
+
+void video_add_callback(void *arg) {
+    ChannelStatus *cs = arg;
+    pthread_mutex_lock(&cs->lock);
+    cs->has_data = 1;
+    pthread_mutex_unlock(&cs->lock);
+}
 
 int play_from_cache(config conf) {
     APCache *apc = NULL;
@@ -129,9 +145,17 @@ int play_from_cache(config conf) {
         lfatal(-1, "Error when opening apcache file. (code: %d)\n", err);
     }
     conf.fps = apc->fps;
-    conf.no_audio = !apc->sample_rate;
+    if (!conf.no_audio) {
+        conf.no_audio = !apc->sample_rate;
+    }
     conf.width = apc->width;
     conf.height = apc->height;
+
+    if (conf.fps == 0 && conf.no_audio) {
+        endwin();
+        printf("Unknown FPS! Exiting...\n");
+        lfatal(-1, "Unknown FPS");
+    }
 
     // PortAudio Stream Params
     PaStreamParameters pa_stm_param;
@@ -174,7 +198,10 @@ int play_from_cache(config conf) {
     ltrace("Allocate video channel");
     // Allocate video channel
     conf.video_ch = alloc_channel(10);
-
+        conf.video_ch->drain_callback.callback = video_drain_callback;
+        conf.video_ch->add_callback .callback = video_add_callback;
+        conf.video_ch->drain_callback.arg = &conf.video_ch_status;
+                conf.video_ch->add_callback.arg = &conf.video_ch_status;
     // Video thread
     pthread_t th_v;
 
@@ -191,31 +218,32 @@ int play_from_cache(config conf) {
                 ltrace("Creating video thread...");
                 pthread_create(&th_v, NULL, play_video, &conf);
             }
-        } else if (apf->type == APAV_AUDIO) {
-                if (++audio_count == 1) {
-                    ltrace("Starting audio stream...");
-                    Pa_StartStream(stream);
-                }
-                    // Write data into stream
-                    Pa_WriteStream(stream, apf->data,
-                                   apf->bsize / (2 * sizeof(float)));
+        } else if (apf->type == APAV_AUDIO && !conf.no_audio) {
+            if (++audio_count == 1) {
+                ltrace("Starting audio stream...");
+                Pa_StartStream(stream);
             }
+            // Write data into stream
+            Pa_WriteStream(stream, apf->data, apf->bsize / (2 * sizeof(float)));
+        }
     }
     if (err != 0 && err != APCACHE_ERR_EOF) {
         printf("Error when reading frame. (code: %d)\n", err);
         lfatal(-1, "Error when reading frame. (code: %d)", err);
     }
 
-    // Wait for video cahnnel empty
-    // TODO: use pthread_cond instead of sleep
-    sleep(1);
+    pthread_mutex_lock(&conf.video_ch_status.lock);
+    if (conf.video_ch_status.has_data)
+        pthread_cond_wait(&conf.video_ch_status.drain_cond, &conf.video_ch_status.lock);
+    pthread_mutex_unlock(&conf.video_ch_status.lock);
     endwin();
-
     // Free video channel
     free_channel(conf.video_ch);
     apcache_frame_free(&apf);
+    Pa_StopStream(stream);
     // Close PortAudio stream
     Pa_CloseStream(stream);
+    Pa_Terminate();
     apcache_close(apc);
     apcache_free(&apc);
     return 0;
