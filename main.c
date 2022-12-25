@@ -19,13 +19,15 @@
 #include "channel/channel.h"
 #include "config.h"
 #include "display.h"
+#include "log/log.h"
 
 #define AUDIO_BUF_SIZE 512
 
-void print_help();
-void print_license();
+static void print_help();
+static void print_license();
 // Handle interrupt (^C)
-void handle_int(int _);
+static void handle_int(int _);
+static void handle_exit(void);
 
 int main(int argc, char *argv[]) {
     // Insucfficient program arguments.
@@ -34,16 +36,30 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
-    // Initialize ncurses window
-    initscr();
-
     // Set interrupt handler
     signal(SIGINT, handle_int);
 
     // Parse program arguments into config.
     config conf = parse_config(argc, argv);
 
-    // conf.width = conf.height = 100;
+    // Initialize ncurses window
+    initscr();
+    atexit(handle_exit);
+
+    // Set max x and y
+    getmaxyx(stdscr, conf.height, conf.width);
+    conf.width--;
+
+    logger_set_default((Logger){
+        .file = conf.logfile ? fopen(conf.logfile, "a") : NULL,
+        .has_color = 0,
+        .has_date = 1,
+        .has_time = 1,
+        .has_filename = 1,
+        .has_linenum = 1,
+        .log_level = conf.log_level,
+        .lock = PTHREAD_MUTEX_INITIALIZER,
+    });
 
     // If --help
     if (conf.help) {
@@ -58,10 +74,12 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
+    trace("Checking whether is an apcache file... (path: %s)", conf.filename);
     int fn_len = strlen(conf.filename);
     if (fn_len > 8) {
         if (strcmp(conf.filename + fn_len - 8, ".apcache") == 0 &&
             is_apcache(conf.filename) == 0) {
+            debug("File detected as an apcache file");
             int err = play_from_cache(conf);
             return err;
         }
@@ -74,6 +92,7 @@ int main(int argc, char *argv[]) {
     // Store stream index.
     int a_idx = -1, v_idx = -1;
 
+    trace("Finding audio and video codec centext and stream index...");
     // Find audio and video codec centext and stream index.
     int err =
         find_codec_context(&conf, &fmt_ctxt, &a_cdc, &v_cdc, &a_idx, &v_idx);
@@ -81,14 +100,16 @@ int main(int argc, char *argv[]) {
         return err;
     }
 
+    debug("No audio");
     // If no audio
     if (conf.no_audio) {
+        trace("Getting framerate...");
         AVRational framerate = fmt_ctxt->streams[v_idx]->avg_frame_rate;
         // Check if has FPS
         if (framerate.num == 0) {
             endwin();
-            printf("Unknown FPS\n");
-            exit(-1);
+            printf("Unknown FPS! Exiting...\n");
+            fatal(-1, "Unknown FPS");
         } else {
             // Calculate FPS
             conf.fps = (double)framerate.num / framerate.den;
@@ -98,21 +119,24 @@ int main(int argc, char *argv[]) {
     // Allocate AVPacket
     AVPacket *pckt = av_packet_alloc();
     if (!pckt) {
+        endwin();
         printf("Unable to allocate AVPacket\n");
-        return -2;
+        fatal(-2, "Unable to allocate AVPacket");
     }
     // Allocate AVFrame
     AVFrame *frame = av_frame_alloc();
     if (!frame) {
+        endwin();
         printf("Unable to allocate AVFrame\n");
-        return -2;
+        fatal(-2, "Unable to allocate AVFrame");
     }
 
     // Allocate resized greyscale image frame
     AVFrame *frame_greyscale = av_frame_alloc();
     if (!frame_greyscale) {
+        endwin();
         printf("Unable to allocate AVFrame for greyscale frame\n");
-        return -2;
+        fatal(-2, "Unable to allocate AVFrame for greyscale frame");
     }
     // Initialize some fields in frame_grey
     frame_greyscale->width = conf.width;
@@ -125,28 +149,34 @@ int main(int argc, char *argv[]) {
     // Allocate resampled audio frame
     AVFrame *frame_resampled = av_frame_alloc();
     if (!frame_resampled) {
+        endwin();
         printf("Unable to allocate AVFrame for audio frame\n");
-        return -2;
+        fatal(-2, "Unable to allocate AVFrame for audio frame");
     }
     // Allocate audio resample context
     SwrContext *resample_ctxt = swr_alloc();
     if (!resample_ctxt) {
+        endwin();
         printf("Unable to allocate AVAudioResampleContext\n");
-        return -2;
+        fatal(-2, "Unable to allocate AVAudioResampleContext");
     }
 
     // PortAudio Stream Params
     PaStreamParameters pa_stm_param;
     // PortAudio Stream
     PaStream *stream;
+
+    debug("Need audio and not cache");
     // If need audio and not cache
     if (!conf.no_audio && !conf.cache) {
+        trace("Initializing PortAudio...");
         // Initialize PortAudio
         err = Pa_Initialize();
         if (err != paNoError) {
             printf("PortAudio init error(code: %d).\n", err);
             return -20;
         }
+        trace("Getting output device...");
         // Get output device
         pa_stm_param.device = Pa_GetDefaultOutputDevice();
         if (pa_stm_param.device == paNoDevice) {
@@ -159,16 +189,20 @@ int main(int argc, char *argv[]) {
         pa_stm_param.suggestedLatency =
             Pa_GetDeviceInfo(pa_stm_param.device)->defaultLowOutputLatency;
         pa_stm_param.hostApiSpecificStreamInfo = NULL;
+        trace("Opening audio stream...");
         // Open audio stream
         err = Pa_OpenStream(&stream, NULL, &pa_stm_param, a_cdc->sample_rate,
                             AUDIO_BUF_SIZE, paClipOff, NULL, NULL);
         if (err != paNoError) {
-            printf("Error when opening audio stream.(code %d)\n", err);
-            return -20;
+            endwin();
+            printf("Error when opening audio stream. (code %d)\n", err);
+            fatal(-3, "Error when opening audio stream. (code %d)", err)
         }
     }
 
+    debug("not cache");
     if (!conf.cache) {
+        trace("Allocating video channel");
         // Allocate video channel
         conf.video_ch = alloc_channel(10);
     }
@@ -178,22 +212,28 @@ int main(int argc, char *argv[]) {
 
     APCache *apc = NULL;
 
+    debug("is cache");
     if (conf.cache) {
         apc = apcache_alloc();
         if (!apc) {
+            endwin();
             printf("Cannot allocate APCache\n");
-            return -33;
+            fatal(-2, "Cannot allocate APCache");
         }
         apc->fps = conf.fps;
         apc->width = conf.width;
         apc->height = conf.height;
         apc->sample_rate = conf.no_audio ? 0 : a_cdc->sample_rate;
+        trace("Opening cache file in w mode...");
         apc->file = fopen(conf.cache, "w");
         if ((err = apcache_create(apc)) != 0) {
+            endwin();
             printf("Error when creating apcache file. (code: %d)\n", err);
-            return -33;
+            fatal(-2, "Error when creating apcache file. (code: %d)", err);
         }
     }
+
+    debug("Ready to play...");
 
     int image_count = 0, audio_count = 0;
     // While not the end of file.
@@ -203,11 +243,15 @@ int main(int argc, char *argv[]) {
             // Send packet to video decoder
             err = avcodec_send_packet(v_cdc, pckt);
             if (err < 0) {
+                endwin();
                 printf(
                     "Error when supplying raw packet data as input to video "
-                    "decoder.(code: %d)\n",
+                    "decoder. (code: %d)\n",
                     err);
-                return -10;
+                fatal(-10,
+                      "Error when supplying raw packet data as input to video "
+                      "decoder. (code: %d)",
+                      err);
             }
             // Read all frames from decoder
             while (1) {
@@ -217,8 +261,9 @@ int main(int argc, char *argv[]) {
                     if (err == AVERROR(EAGAIN) || err == AVERROR_EOF) {
                         break;
                     }
-                    printf("Failed when decoding video(code: %d)\n", err);
-                    return -5;
+                    endwin();
+                    printf("Failed when decoding video. (code: %d)\n", err);
+                    fatal(-10, "Failed when decoding video. (code: %d)", err);
                 }
                 int buf_size = av_image_get_buffer_size(
                     AV_PIX_FMT_GRAY8, conf.width, conf.height, 1);
@@ -239,16 +284,20 @@ int main(int argc, char *argv[]) {
                     apf.bsize = buf_size;
                     apf.data = buf;
                     if ((err = apcache_write_frame(apc, &apf)) != 0) {
+                        endwin();
                         printf(
                             "Error when writing video frame to cache file. "
                             "(code: %d)\n",
                             err);
-                        return -33;
+                        fatal(-10,
+                              "Error when writing video frame to cache file. "
+                              "(code: %d)",
+                              err);
                     }
+                    free(buf);
                     clear();
                     printw("Writing frame: %d. (video)\n", image_count);
                     refresh();
-
                 } else {
                     // Add scaled data to video channel
                     add_element(conf.video_ch, buf);
@@ -256,6 +305,7 @@ int main(int argc, char *argv[]) {
                 // Reset the frame fields.
                 av_frame_unref(frame_greyscale);
                 if (++image_count == 1 && !conf.cache) {
+                    trace("Creating video thread...");
                     pthread_create(&th_v, NULL, play_video, &conf);
                 }
             }
@@ -263,11 +313,15 @@ int main(int argc, char *argv[]) {
             // Send packet to audio decoder
             err = avcodec_send_packet(a_cdc, pckt);
             if (err < 0) {
+                endwin();
                 printf(
                     "Error when supplying raw packet data as input to audio "
-                    "decoder.(code: %d)\n",
+                    "decoder. (code: %d)\n",
                     err);
-                return -10;
+                fatal(-10,
+                      "Error when supplying raw packet data as input to audio "
+                      "decoder. (code: %d)",
+                      err);
             }
             // Read all frames from audio decoder
             while (1) {
@@ -277,8 +331,9 @@ int main(int argc, char *argv[]) {
                     if (err == AVERROR(EAGAIN) || err == AVERROR_EOF) {
                         break;
                     }
-                    printf("Failed when decoding audio(code: %d)\n", err);
-                    return -5;
+                    endwin();
+                    printf("Failed when decoding audio. (code: %d)\n", err);
+                    fatal(-10, "Failed when decoding audio. (code: %d)", err);
                 }
                 // Unref last frame info (important!)
                 av_frame_unref(frame_resampled);
@@ -292,10 +347,13 @@ int main(int argc, char *argv[]) {
                 // Resample audio data
                 err = swr_convert_frame(resample_ctxt, frame_resampled, frame);
                 if (err != 0) {
+                    endwin();
                     print_averror(err);
-                    return -20;
+                    fatal(-10, "Error when resampling audio data. (code: %d)",
+                          err);
                 }
                 if (++audio_count == 1 && !conf.cache) {
+                    trace("Starting audio stream...");
                     Pa_StartStream(stream);
                 }
                 if (conf.cache) {
@@ -304,11 +362,15 @@ int main(int argc, char *argv[]) {
                     apf.bsize = frame_resampled->nb_samples * 2 * sizeof(float);
                     apf.data = frame_resampled->data[0];
                     if ((err = apcache_write_frame(apc, &apf)) != 0) {
+                        endwin();
                         printf(
                             "Error when writing audio frame to cache file. "
                             "(code: %d)\n",
                             err);
-                        return -33;
+                        fatal(-10,
+                              "Error when writing audio frame to cache file. "
+                              "(code: %d)",
+                              err);
                     }
                     clear();
                     printw("Writing frame: %d. (audio)\n", image_count);
@@ -356,6 +418,7 @@ int main(int argc, char *argv[]) {
     Pa_CloseStream(stream);
     apcache_close(apc);
     apcache_free(&apc);
+    if (logger_get_default().file) fclose(logger_get_default().file);
 }
 
 /// @brief Handle interrupt (^C)
@@ -367,17 +430,31 @@ void handle_int(int _) {
     exit(0);
 }
 
+void handle_exit() {
+    // Exit ncurses mode
+    endwin();
+}
+
 void print_help() {
     printf(
         "ASCII Player v1.0.0\n\
 A media player that plays video file in ASCII characters.\n\
-Usage: asciiplayer <file> [-h | --help] [-l | --license] [--cache <file>]\n\
-                          [-n | —no-audio]\n\
+Usage: asciiplayer <file> [-h | --help] [-l | --license] [-c | --cache <file>]\n\
+                          [-n | —no-audio] [-g | --grayscale <string>] [-r | --reverse]\n\
+                          [--log <log file>] [--loglevel <level num>]\n\
+\n\
        --help -h            Print this help page\n\
        --license -l         Show license and author info\n\
        --cache -c <file>    Process video into a cached file\n\
                             example: $ asciiplayer video.mp4 --cache cached.apcache\n\
-       --no-audio -n        Play video without playing audio\n");
+       --grayscale -g <string>\n\
+                            Grayscale string (default: \" .:-=+*#%%@\")\n\
+       --reverse -r         Reverse grayscale string\n\
+       --no-audio -n        Play video without playing audio\n\
+       --log <log file>     Path to log file\n\
+       --loglevel <level num>\n\
+                            Log level number {TRACE: 0, DEBUG: 1, INFO: 2, WARN: 3,\n\
+                                              ERROR: 4, FATAL: 5}\n");
 }
 
 void print_license() {

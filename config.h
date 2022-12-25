@@ -2,6 +2,7 @@
 #define CONFIG_H
 
 #include "channel/channel.h"
+#include "log/log.h"
 
 typedef struct {
     // filename can NOT be NULL or empty
@@ -17,8 +18,10 @@ typedef struct {
     double fps;
     int width;
     int height;
-    char grey_ascii[256];
+    char grey_ascii[256 + 1];
     float grey_ascii_step;
+    char *logfile;
+    LogLevel log_level;
     Channel *video_ch;
     Channel *audio_ch;
 } config;
