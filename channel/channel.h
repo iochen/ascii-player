@@ -3,6 +3,11 @@
 
 #include <pthread.h>
 
+typedef struct {
+    void (*callback)(void *);
+    void *arg;
+}ChannelCallbackFn;
+
 // A buffered channel.
 typedef struct {
     // mutex lock to keep structure thread-safe
@@ -23,7 +28,13 @@ typedef struct {
     pthread_cond_t producer_cond;
     // when buf is empty, consumer wait for this cond
     pthread_cond_t consumer_cond;
+    // When a new element is added, call this function
+    ChannelCallbackFn add_callback;
+    // When channel drains while reading, call this function
+    ChannelCallbackFn drain_callback;
 } Channel;
+
+
 
 /// @brief Allocate Channel on heap.
 /// @param cap Channel capaticy (limit: >0).

@@ -28,8 +28,8 @@ Channel *alloc_channel(int cap) {
     }
     // init channel
     *ch = (Channel){
-        PTHREAD_MUTEX_INITIALIZER, buf, cap, 0, 0, 0, PTHREAD_COND_INITIALIZER,
-        PTHREAD_COND_INITIALIZER};
+        PTHREAD_MUTEX_INITIALIZER, buf,  cap, 0, 0, 0, PTHREAD_COND_INITIALIZER,
+        PTHREAD_COND_INITIALIZER,  {NULL, NULL}, {NULL, NULL}};
     return ch;
 }
 
@@ -83,6 +83,9 @@ int add_element(Channel *ch, void *ele) {
     ch->fill_n %= ch->cap;
     // len++
     ch->len++;
+    if (ch->add_callback.callback) {
+        ch->add_callback.callback(ch->add_callback.arg);
+    }
     // unlock mutex lock
     pthread_mutex_unlock(&ch->lock);
     // signal consumer_cond to unblock may-existing blocking consumer thread
@@ -112,6 +115,9 @@ int read_element(Channel *ch, void **p_ele) {
     }
     // buf empty
     if (ch->len == 0) {
+        if (ch->drain_callback.callback) {
+            ch->drain_callback.callback(ch->drain_callback.arg);
+        }
         pthread_cond_wait(&ch->consumer_cond, &ch->lock);
     }
     // invalid read_n
