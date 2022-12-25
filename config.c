@@ -18,7 +18,7 @@ static char *str_rev(char *str) {
 
 static config default_config() {
     config conf;
-    conf.cache = 0;
+    conf.cache = NULL;
     conf.fps = 0;
     conf.filename = NULL;
     conf.help = 0;
