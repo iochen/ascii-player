@@ -52,10 +52,7 @@
 ||==================================================================================||
 */
 
-typedef enum {
-    APAV_AUDIO,
-    APAV_VIDEO
-} APAVType;
+typedef enum { APAV_AUDIO, APAV_VIDEO } APAVType;
 
 typedef enum {
     APCACHE_ERR_FILE_NOT_EXIST = -100000,
@@ -90,7 +87,7 @@ typedef struct {
     APAVType type;
     // Size of data array (in byte)
     uint32_t bsize;
-    // For version 1, 
+    // For version 1,
     // when the frame is a video frame, data is an array of type unsigned char;
     // when the frame is an audio frame, data is an array of type float;
     void *data;
@@ -117,7 +114,8 @@ APCache *apcache_alloc();
 void apcache_free(APCache **apc);
 
 /// @brief Write meta data to apcache file
-/// @param apc APCache struct with fps, width, height, sample_rate set to target number,
+/// @param apc APCache struct with fps, width, height, sample_rate set to target
+/// number,
 ///            file pointed to a opened FILE with mode set to "w",
 ///            version set to target version (1).
 /// @return 0 for success, minus number for APCacheErr

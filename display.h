@@ -2,10 +2,11 @@
 #define DISPLAY_H
 
 #include <portaudio.h>
+#include <stdatomic.h>
 
+#include "apcache.h"
 #include "channel/channel.h"
 #include "config.h"
-#include "apcache.h"
 
 // typedef struct {
 //     int nb_samples;
@@ -17,6 +18,7 @@
 //     unsigned char *data;
 // } APVideoData;
 
+extern atomic_bool ncurses_status;
 
 void *play_video(void *arg);
 
