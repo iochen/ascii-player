@@ -8,7 +8,14 @@ LDFLAGS = -lavcodec -lavformat -lavfilter -lavdevice -lswresample -lswscale -lav
 CCFLAGS = -Wall
 FRAMEWORKFLAGS = $(addprefix -framework , CoreFoundation VideoDecodeAcceleration CoreVideo AudioToolbox VideoToolbox Security CoreMedia)
 UNAME = $(shell uname)
-OSFLAGS = 
+
+ifdef ELDFLAGS
+	LDFLAGS += $(ELDFLAGS)
+endif
+
+ifdef ECCFLAGS
+	CCFLAGS += $(ECCFLAGS)
+endif
 
 # macOS
 ifeq ($(UNAME), Darwin)
