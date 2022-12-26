@@ -6,10 +6,13 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <stdatomic.h>
 
 #include "channel/channel.h"
 #include "config.h"
 #include "log/log.h"
+
+atomic_bool ncurses_status = 0;
 
 #define DP_MIN(A, B) ((A) < (B) ? (A) : (B))
 
@@ -140,7 +143,10 @@ int play_from_cache(config conf) {
     int err;
     linfo("Trying to open the apcache file (path: %s)", conf.filename);
     if ((err = apcache_open(conf.filename, &apc)) != 0) {
-        endwin();
+        if (ncurses_status) {
+            endwin();
+            ncurses_status = 0;
+        }
         printf("Error when opening apcache file. (code: %d)\n", err);
         lfatal(-1, "Error when opening apcache file. (code: %d)\n", err);
     }
@@ -152,7 +158,10 @@ int play_from_cache(config conf) {
     conf.height = apc->height;
 
     if (conf.fps == 0 && conf.no_audio) {
-        endwin();
+        if (ncurses_status) {
+            endwin();
+            ncurses_status = 0;
+        }
         printf("Unknown FPS! Exiting...\n");
         lfatal(-1, "Unknown FPS");
     }
@@ -168,7 +177,10 @@ int play_from_cache(config conf) {
         // Initialize PortAudio
         err = Pa_Initialize();
         if (err != paNoError) {
-            endwin();
+            if (ncurses_status) {
+                endwin();
+                ncurses_status = 0;
+            }
             printf("PortAudio init error(code: %d).\n", err);
             lfatal(-1, "PortAudio init error(code: %d).", err);
         }
@@ -198,10 +210,10 @@ int play_from_cache(config conf) {
     linfo("Allocate video channel");
     // Allocate video channel
     conf.video_ch = alloc_channel(10);
-        conf.video_ch->drain_callback.callback = video_drain_callback;
-        conf.video_ch->add_callback .callback = video_add_callback;
-        conf.video_ch->drain_callback.arg = &conf.video_ch_status;
-                conf.video_ch->add_callback.arg = &conf.video_ch_status;
+    conf.video_ch->drain_callback.callback = video_drain_callback;
+    conf.video_ch->add_callback.callback = video_add_callback;
+    conf.video_ch->drain_callback.arg = &conf.video_ch_status;
+    conf.video_ch->add_callback.arg = &conf.video_ch_status;
     // Video thread
     pthread_t th_v;
 
@@ -234,9 +246,13 @@ int play_from_cache(config conf) {
 
     pthread_mutex_lock(&conf.video_ch_status.lock);
     if (conf.video_ch_status.has_data)
-        pthread_cond_wait(&conf.video_ch_status.drain_cond, &conf.video_ch_status.lock);
+        pthread_cond_wait(&conf.video_ch_status.drain_cond,
+                          &conf.video_ch_status.lock);
     pthread_mutex_unlock(&conf.video_ch_status.lock);
-    endwin();
+    if (ncurses_status) {
+        endwin();
+        ncurses_status = 0;
+    }
     // Free video channel
     free_channel(conf.video_ch);
     apcache_frame_free(&apf);

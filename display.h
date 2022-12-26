@@ -2,6 +2,7 @@
 #define DISPLAY_H
 
 #include <portaudio.h>
+#include <stdatomic.h>
 
 #include "channel/channel.h"
 #include "config.h"
@@ -17,6 +18,7 @@
 //     unsigned char *data;
 // } APVideoData;
 
+extern atomic_bool ncurses_status;
 
 void *play_video(void *arg);
 

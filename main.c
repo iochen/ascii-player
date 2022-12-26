@@ -44,7 +44,10 @@ int main(int argc, char *argv[]) {
     config conf = parse_config(argc, argv);
 
     // Initialize ncurses window
-    initscr();
+    if (!ncurses_status) {
+        initscr();
+        ncurses_status = 1;
+    }
     atexit(handle_exit);
 
     // Set max x and y
@@ -64,13 +67,19 @@ int main(int argc, char *argv[]) {
 
     // If --help
     if (conf.help) {
-        endwin();
+        if (ncurses_status) {
+            endwin();
+            ncurses_status = 0;
+        }
         print_help();
         return 0;
     }
     // If --license
     if (conf.license) {
-        endwin();
+        if (ncurses_status) {
+            endwin();
+            ncurses_status = 0;
+        }
         print_license();
         return 0;
     }
@@ -107,7 +116,10 @@ int main(int argc, char *argv[]) {
     AVRational framerate = fmt_ctxt->streams[v_idx]->avg_frame_rate;
     // Check if has FPS
     if (framerate.num == 0 && conf.no_audio) {
-        endwin();
+        if (ncurses_status) {
+            endwin();
+            ncurses_status = 0;
+        }
         printf("Unknown FPS! Exiting...\n");
         lfatal(-1, "Unknown FPS");
     } else {
@@ -118,14 +130,20 @@ int main(int argc, char *argv[]) {
     // Allocate AVPacket
     AVPacket *pckt = av_packet_alloc();
     if (!pckt) {
-        endwin();
+        if (ncurses_status) {
+            endwin();
+            ncurses_status = 0;
+        }
         printf("Unable to allocate AVPacket\n");
         lfatal(-2, "Unable to allocate AVPacket");
     }
     // Allocate AVFrame
     AVFrame *frame = av_frame_alloc();
     if (!frame) {
-        endwin();
+        if (ncurses_status) {
+            endwin();
+            ncurses_status = 0;
+        }
         printf("Unable to allocate AVFrame\n");
         lfatal(-2, "Unable to allocate AVFrame");
     }
@@ -133,7 +151,10 @@ int main(int argc, char *argv[]) {
     // Allocate resized greyscale image frame
     AVFrame *frame_greyscale = av_frame_alloc();
     if (!frame_greyscale) {
-        endwin();
+        if (ncurses_status) {
+            endwin();
+            ncurses_status = 0;
+        }
         printf("Unable to allocate AVFrame for greyscale frame\n");
         lfatal(-2, "Unable to allocate AVFrame for greyscale frame");
     }
@@ -148,14 +169,20 @@ int main(int argc, char *argv[]) {
     // Allocate resampled audio frame
     AVFrame *frame_resampled = av_frame_alloc();
     if (!frame_resampled) {
-        endwin();
+        if (ncurses_status) {
+            endwin();
+            ncurses_status = 0;
+        }
         printf("Unable to allocate AVFrame for audio frame\n");
         lfatal(-2, "Unable to allocate AVFrame for audio frame");
     }
     // Allocate audio resample context
     SwrContext *resample_ctxt = swr_alloc();
     if (!resample_ctxt) {
-        endwin();
+        if (ncurses_status) {
+            endwin();
+            ncurses_status = 0;
+        }
         printf("Unable to allocate AVAudioResampleContext\n");
         lfatal(-2, "Unable to allocate AVAudioResampleContext");
     }
@@ -193,7 +220,10 @@ int main(int argc, char *argv[]) {
         err = Pa_OpenStream(&stream, NULL, &pa_stm_param, a_cdc->sample_rate,
                             AUDIO_BUF_SIZE, paClipOff, NULL, NULL);
         if (err != paNoError) {
-            endwin();
+            if (ncurses_status) {
+                endwin();
+                ncurses_status = 0;
+            }
             printf("Error when opening audio stream. (code %d)\n", err);
             lfatal(-3, "Error when opening audio stream. (code %d)", err)
         }
@@ -219,7 +249,10 @@ int main(int argc, char *argv[]) {
     if (conf.cache) {
         apc = apcache_alloc();
         if (!apc) {
-            endwin();
+            if (ncurses_status) {
+                endwin();
+                ncurses_status = 0;
+            }
             printf("Cannot allocate APCache\n");
             lfatal(-2, "Cannot allocate APCache");
         }
@@ -230,7 +263,10 @@ int main(int argc, char *argv[]) {
         linfo("Opening cache file in w mode...");
         apc->file = fopen(conf.cache, "w");
         if ((err = apcache_create(apc)) != 0) {
-            endwin();
+            if (ncurses_status) {
+                endwin();
+                ncurses_status = 0;
+            }
             printf("Error when creating apcache file. (code: %d)\n", err);
             lfatal(-2, "Error when creating apcache file. (code: %d)", err);
         }
@@ -246,7 +282,10 @@ int main(int argc, char *argv[]) {
             // Send packet to video decoder
             err = avcodec_send_packet(v_cdc, pckt);
             if (err < 0) {
-                endwin();
+                if (ncurses_status) {
+                    endwin();
+                    ncurses_status = 0;
+                }
                 printf(
                     "Error when supplying raw packet data as input to video "
                     "decoder. (code: %d)\n",
@@ -264,7 +303,10 @@ int main(int argc, char *argv[]) {
                     if (err == AVERROR(EAGAIN) || err == AVERROR_EOF) {
                         break;
                     }
-                    endwin();
+                    if (ncurses_status) {
+                        endwin();
+                        ncurses_status = 0;
+                    }
                     printf("Failed when decoding video. (code: %d)\n", err);
                     lfatal(-10, "Failed when decoding video. (code: %d)", err);
                 }
@@ -287,7 +329,10 @@ int main(int argc, char *argv[]) {
                     apf.bsize = buf_size;
                     apf.data = buf;
                     if ((err = apcache_write_frame(apc, &apf)) != 0) {
-                        endwin();
+                        if (ncurses_status) {
+                            endwin();
+                            ncurses_status = 0;
+                        }
                         printf(
                             "Error when writing video frame to cache file. "
                             "(code: %d)\n",
@@ -316,7 +361,10 @@ int main(int argc, char *argv[]) {
             // Send packet to audio decoder
             err = avcodec_send_packet(a_cdc, pckt);
             if (err < 0) {
-                endwin();
+                if (ncurses_status) {
+                    endwin();
+                    ncurses_status = 0;
+                }
                 printf(
                     "Error when supplying raw packet data as input to audio "
                     "decoder. (code: %d)\n",
@@ -334,7 +382,10 @@ int main(int argc, char *argv[]) {
                     if (err == AVERROR(EAGAIN) || err == AVERROR_EOF) {
                         break;
                     }
-                    endwin();
+                    if (ncurses_status) {
+                        endwin();
+                        ncurses_status = 0;
+                    }
                     printf("Failed when decoding audio. (code: %d)\n", err);
                     lfatal(-10, "Failed when decoding audio. (code: %d)", err);
                 }
@@ -350,7 +401,10 @@ int main(int argc, char *argv[]) {
                 // Resample audio data
                 err = swr_convert_frame(resample_ctxt, frame_resampled, frame);
                 if (err != 0) {
-                    endwin();
+                    if (ncurses_status) {
+                        endwin();
+                        ncurses_status = 0;
+                    }
                     print_averror(err);
                     lfatal(-10, "Error when resampling audio data. (code: %d)",
                            err);
@@ -365,7 +419,10 @@ int main(int argc, char *argv[]) {
                     apf.bsize = frame_resampled->nb_samples * 2 * sizeof(float);
                     apf.data = frame_resampled->data[0];
                     if ((err = apcache_write_frame(apc, &apf)) != 0) {
-                        endwin();
+                        if (ncurses_status) {
+                            endwin();
+                            ncurses_status = 0;
+                        }
                         printf(
                             "Error when writing audio frame to cache file. "
                             "(code: %d)\n",
@@ -393,11 +450,15 @@ int main(int argc, char *argv[]) {
 
     pthread_mutex_lock(&conf.video_ch_status.lock);
     if (conf.video_ch_status.has_data)
-        pthread_cond_wait(&conf.video_ch_status.drain_cond, &conf.video_ch_status.lock);
+        pthread_cond_wait(&conf.video_ch_status.drain_cond,
+                          &conf.video_ch_status.lock);
     pthread_mutex_unlock(&conf.video_ch_status.lock);
 
     // Exit ncurses mode
-    endwin();
+    if (ncurses_status) {
+        endwin();
+        ncurses_status = 0;
+    }
     // Free decode frame
     av_frame_free(&frame);
     // Free greyscale frame
@@ -434,14 +495,20 @@ int main(int argc, char *argv[]) {
 /// @param _
 void handle_int(int _) {
     // Exit ncurses mode
-    endwin();
+    if (ncurses_status) {
+        endwin();
+        ncurses_status = 0;
+    }
     // Exit program
     exit(0);
 }
 
 void handle_exit() {
     // Exit ncurses mode
-    endwin();
+    if (ncurses_status) {
+        endwin();
+        ncurses_status = 0;
+    }
 }
 
 void print_help() {
@@ -471,9 +538,9 @@ void print_license() {
         "ASCII Player is an open-source software (GNU GPLv3) written in C programming language.\n\
 \n\
 Author(s):\n\
-    Maintainer: Zhendong Chen 221870144 @ Nanjing University\n\
-    Developer : Yuqing Tang   221870117 @ Nanjing University\n\
-    Developer : Yaqi Dong     221870103 @ Nanjing University\n\
+    Maintainer: Zhendong Chen 221870144 @ Yuxiu College @ Nanjing University\n\
+    Developer : Yuqing Tang   221870117 @ Yuxiu College @ Nanjing University\n\
+    Developer : Yaqi Dong     221870103 @ Yuxiu College @ Nanjing University\n\
 \n\
 Special Thanks To:\n\
     GNU Project\n\
