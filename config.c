@@ -32,9 +32,9 @@ static config default_config() {
     conf.grey_ascii_step = (strlen(conf.grey_ascii) - 1) / 255.0;
     conf.video_ch = NULL;
     conf.audio_ch = NULL;
-    conf.video_ch_status.lock = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
+    conf.video_ch_status.lock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
     conf.video_ch_status.has_data = 0;
-    conf.video_ch_status.drain_cond = (pthread_cond_t) PTHREAD_COND_INITIALIZER;
+    conf.video_ch_status.drain_cond = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
     return conf;
 }
 

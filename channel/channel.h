@@ -6,7 +6,7 @@
 typedef struct {
     void (*callback)(void *);
     void *arg;
-}ChannelCallbackFn;
+} ChannelCallbackFn;
 
 // A buffered channel.
 typedef struct {
@@ -33,8 +33,6 @@ typedef struct {
     // When channel drains while reading, call this function
     ChannelCallbackFn drain_callback;
 } Channel;
-
-
 
 /// @brief Allocate Channel on heap.
 /// @param cap Channel capaticy (limit: >0).

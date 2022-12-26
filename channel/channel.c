@@ -27,9 +27,16 @@ Channel *alloc_channel(int cap) {
         return NULL;
     }
     // init channel
-    *ch = (Channel){
-        PTHREAD_MUTEX_INITIALIZER, buf,  cap, 0, 0, 0, PTHREAD_COND_INITIALIZER,
-        PTHREAD_COND_INITIALIZER,  {NULL, NULL}, {NULL, NULL}};
+    *ch = (Channel){PTHREAD_MUTEX_INITIALIZER,
+                    buf,
+                    cap,
+                    0,
+                    0,
+                    0,
+                    PTHREAD_COND_INITIALIZER,
+                    PTHREAD_COND_INITIALIZER,
+                    {NULL, NULL},
+                    {NULL, NULL}};
     return ch;
 }
 

@@ -2,11 +2,11 @@
 
 #include <libavutil/frame.h>
 #include <ncurses.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
 #include <unistd.h>
-#include <stdatomic.h>
 
 #include "channel/channel.h"
 #include "config.h"

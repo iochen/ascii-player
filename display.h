@@ -4,9 +4,9 @@
 #include <portaudio.h>
 #include <stdatomic.h>
 
+#include "apcache.h"
 #include "channel/channel.h"
 #include "config.h"
-#include "apcache.h"
 
 // typedef struct {
 //     int nb_samples;

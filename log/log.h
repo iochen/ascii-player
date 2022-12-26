@@ -1,8 +1,8 @@
 #ifndef LOG_H
 #define LOG_H
 
-#include <stdio.h>
 #include <pthread.h>
+#include <stdio.h>
 
 #define LOG_DEFAULT_CODE -1
 
@@ -46,45 +46,50 @@ extern Logger logger_get_default();
 
 extern void logger_set_default(const Logger logger);
 
-void logger_log_code_va_list(Logger *logger, LogLevel ll, int err_code, char *filename,
-                                    int linenum, char *fmt, va_list ap);
+void logger_log_code_va_list(Logger *logger, LogLevel ll, int err_code,
+                             char *filename, int linenum, char *fmt,
+                             va_list ap);
 
 extern void logger_log_code(Logger *logger, LogLevel ll, int err_code,
                             char *filename, int linenum, char *fmt, ...);
 
-extern void logger_log_code_default(LogLevel ll, int err_code,
-                            char *filename, int linenum, char *fmt, ...);
+extern void logger_log_code_default(LogLevel ll, int err_code, char *filename,
+                                    int linenum, char *fmt, ...);
 
-#define logger_log(logger, ll, filename, linenum, fmt, ...) \
-    logger_log_code(logger, ll, LOG_DEFAULT_CODE, filename, linenum, fmt, ## __VA_ARGS__)
+#define logger_log(logger, ll, filename, linenum, fmt, ...)               \
+    logger_log_code(logger, ll, LOG_DEFAULT_CODE, filename, linenum, fmt, \
+                    ##__VA_ARGS__)
 
-#define logger_log_default(ll, filename, linenum, fmt, ...) \
-    logger_log_code_default(ll, LOG_DEFAULT_CODE, filename, linenum, fmt, ## __VA_ARGS__)
+#define logger_log_default(ll, filename, linenum, fmt, ...)               \
+    logger_log_code_default(ll, LOG_DEFAULT_CODE, filename, linenum, fmt, \
+                            ##__VA_ARGS__)
 
-#define lfatal(err_code, fmt, ...) \
-    logger_log_code_default(LL_FATAL, err_code, __FILE__, __LINE__, fmt, ## __VA_ARGS__);
+#define lfatal(err_code, fmt, ...)                                       \
+    logger_log_code_default(LL_FATAL, err_code, __FILE__, __LINE__, fmt, \
+                            ##__VA_ARGS__)
 #define lerror(fmt, ...) \
-    logger_log_default(LL_ERROR, __FILE__, __LINE__, fmt, ## __VA_ARGS__)
+    logger_log_default(LL_ERROR, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define lwarn(fmt, ...) \
-    logger_log_default(LL_WARN, __FILE__, __LINE__, fmt, ## __VA_ARGS__)
+    logger_log_default(LL_WARN, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define linfo(fmt, ...) \
-    logger_log_default(LL_INFO, __FILE__, __LINE__, fmt, ## __VA_ARGS__)
+    logger_log_default(LL_INFO, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define ldebug(fmt, ...) \
-    logger_log_default(LL_DEBUG, __FILE__, __LINE__, fmt, ## __VA_ARGS__)
+    logger_log_default(LL_DEBUG, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define ltrace(fmt, ...) \
-    logger_log_default(LL_TRACE, __FILE__, __LINE__, fmt, ## __VA_ARGS__)
+    logger_log_default(LL_TRACE, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 
-#define log_fatal(logger, err_code, fmt, ...) \
-    logger_log_code(logger, LL_FATAL, err_code, __FILE__, __LINE__, fmt, ## __VA_ARGS__);
+#define log_fatal(logger, err_code, fmt, ...)                            \
+    logger_log_code(logger, LL_FATAL, err_code, __FILE__, __LINE__, fmt, \
+                    ##__VA_ARGS__)
 #define log_error(logger, fmt, ...) \
-    logger_log(logger, LL_ERROR, __FILE__, __LINE__, fmt, ## __VA_ARGS__)
+    logger_log(logger, LL_ERROR, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define log_warn(logger, fmt, ...) \
-    logger_log(logger, LL_WARN, __FILE__, __LINE__, fmt, ## __VA_ARGS__)
+    logger_log(logger, LL_WARN, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define log_info(logger, fmt, ...) \
-    logger_log(logger, LL_INFO, __FILE__, __LINE__, fmt, ## __VA_ARGS__)
+    logger_log(logger, LL_INFO, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define log_debug(logger, fmt, ...) \
-    logger_log(logger, LL_DEBUG, __FILE__, __LINE__, fmt, ## __VA_ARGS__)
+    logger_log(logger, LL_DEBUG, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define log_trace(logger, fmt, ...) \
-    logger_log(logger, LL_TRACE, __FILE__, __LINE__, fmt, ## __VA_ARGS__)
+    logger_log(logger, LL_TRACE, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 
 #endif
