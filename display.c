@@ -138,7 +138,7 @@ void video_add_callback(void *arg) {
 int play_from_cache(config conf) {
     APCache *apc = NULL;
     int err;
-    ltrace("Trying to open the apcache file (path: %s)", conf.filename);
+    linfo("Trying to open the apcache file (path: %s)", conf.filename);
     if ((err = apcache_open(conf.filename, &apc)) != 0) {
         endwin();
         printf("Error when opening apcache file. (code: %d)\n", err);
@@ -164,7 +164,7 @@ int play_from_cache(config conf) {
     // If need audio and not cache
     if (!conf.no_audio) {
         ldebug("Has audio");
-        ltrace("Initialize PortAudio...");
+        linfo("Initialize PortAudio...");
         // Initialize PortAudio
         err = Pa_Initialize();
         if (err != paNoError) {
@@ -172,7 +172,7 @@ int play_from_cache(config conf) {
             printf("PortAudio init error(code: %d).\n", err);
             lfatal(-1, "PortAudio init error(code: %d).", err);
         }
-        ltrace("Get output device");
+        linfo("Get output device");
         // Get output device
         pa_stm_param.device = Pa_GetDefaultOutputDevice();
         if (pa_stm_param.device == paNoDevice) {
@@ -185,7 +185,7 @@ int play_from_cache(config conf) {
         pa_stm_param.suggestedLatency =
             Pa_GetDeviceInfo(pa_stm_param.device)->defaultLowOutputLatency;
         pa_stm_param.hostApiSpecificStreamInfo = NULL;
-        ltrace("Opening audio stream...");
+        linfo("Opening audio stream...");
         // Open audio stream
         err = Pa_OpenStream(&stream, NULL, &pa_stm_param, apc->sample_rate,
                             CACHE_AUDIO_BUF_SIZE, paClipOff, NULL, NULL);
@@ -195,7 +195,7 @@ int play_from_cache(config conf) {
         }
     }
 
-    ltrace("Allocate video channel");
+    linfo("Allocate video channel");
     // Allocate video channel
     conf.video_ch = alloc_channel(10);
         conf.video_ch->drain_callback.callback = video_drain_callback;
@@ -208,19 +208,19 @@ int play_from_cache(config conf) {
     int image_count = 0, audio_count = 0;
     APFrame *apf = NULL;
 
-    ltrace("Reading frames from apcache file...");
+    linfo("Reading frames from apcache file...");
     // While not the end of file.
     while ((err = apcache_read_frame(apc, &apf)) == 0) {
         if (apf->type == APAV_VIDEO) {
             add_element(conf.video_ch, apf->data);
             apf->data = NULL;
             if (++image_count == 1) {
-                ltrace("Creating video thread...");
+                linfo("Creating video thread...");
                 pthread_create(&th_v, NULL, play_video, &conf);
             }
         } else if (apf->type == APAV_AUDIO && !conf.no_audio) {
             if (++audio_count == 1) {
-                ltrace("Starting audio stream...");
+                linfo("Starting audio stream...");
                 Pa_StartStream(stream);
             }
             // Write data into stream

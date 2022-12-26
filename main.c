@@ -75,7 +75,7 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
-    ltrace("Checking whether is an apcache file... (path: %s)", conf.filename);
+    linfo("Checking whether is an apcache file... (path: %s)", conf.filename);
     int fn_len = strlen(conf.filename);
     if (fn_len > 8) {
         if (strcmp(conf.filename + fn_len - 8, ".apcache") == 0 &&
@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
     // Store stream index.
     int a_idx = -1, v_idx = -1;
 
-    ltrace("Finding audio and video codec centext and stream index...");
+    linfo("Finding audio and video codec centext and stream index...");
     // Find audio and video codec centext and stream index.
     int err =
         find_codec_context(&conf, &fmt_ctxt, &a_cdc, &v_cdc, &a_idx, &v_idx);
@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
 
     ldebug("No audio");
     // If no audio
-    ltrace("Getting framerate...");
+    linfo("Getting framerate...");
     AVRational framerate = fmt_ctxt->streams[v_idx]->avg_frame_rate;
     // Check if has FPS
     if (framerate.num == 0 && conf.no_audio) {
@@ -168,14 +168,14 @@ int main(int argc, char *argv[]) {
     ldebug("Need audio and not cache");
     // If need audio and not cache
     if (!conf.no_audio && !conf.cache) {
-        ltrace("Initializing PortAudio...");
+        linfo("Initializing PortAudio...");
         // Initialize PortAudio
         err = Pa_Initialize();
         if (err != paNoError) {
             printf("PortAudio init error(code: %d).\n", err);
             return -20;
         }
-        ltrace("Getting output device...");
+        linfo("Getting output device...");
         // Get output device
         pa_stm_param.device = Pa_GetDefaultOutputDevice();
         if (pa_stm_param.device == paNoDevice) {
@@ -188,7 +188,7 @@ int main(int argc, char *argv[]) {
         pa_stm_param.suggestedLatency =
             Pa_GetDeviceInfo(pa_stm_param.device)->defaultLowOutputLatency;
         pa_stm_param.hostApiSpecificStreamInfo = NULL;
-        ltrace("Opening audio stream...");
+        linfo("Opening audio stream...");
         // Open audio stream
         err = Pa_OpenStream(&stream, NULL, &pa_stm_param, a_cdc->sample_rate,
                             AUDIO_BUF_SIZE, paClipOff, NULL, NULL);
@@ -201,7 +201,7 @@ int main(int argc, char *argv[]) {
 
     ldebug("not cache");
     if (!conf.cache) {
-        ltrace("Allocating video channel");
+        linfo("Allocating video channel");
         // Allocate video channel
         conf.video_ch = alloc_channel(10);
         conf.video_ch->drain_callback.callback = video_drain_callback;
@@ -227,7 +227,7 @@ int main(int argc, char *argv[]) {
         apc->width = conf.width;
         apc->height = conf.height;
         apc->sample_rate = conf.no_audio ? 0 : a_cdc->sample_rate;
-        ltrace("Opening cache file in w mode...");
+        linfo("Opening cache file in w mode...");
         apc->file = fopen(conf.cache, "w");
         if ((err = apcache_create(apc)) != 0) {
             endwin();
@@ -308,7 +308,7 @@ int main(int argc, char *argv[]) {
                 // Reset the frame fields.
                 av_frame_unref(frame_greyscale);
                 if (++image_count == 1 && !conf.cache) {
-                    ltrace("Creating video thread...");
+                    linfo("Creating video thread...");
                     pthread_create(&th_v, NULL, play_video, &conf);
                 }
             }
@@ -356,7 +356,7 @@ int main(int argc, char *argv[]) {
                            err);
                 }
                 if (++audio_count == 1 && !conf.cache) {
-                    ltrace("Starting audio stream...");
+                    linfo("Starting audio stream...");
                     Pa_StartStream(stream);
                 }
                 if (conf.cache) {
