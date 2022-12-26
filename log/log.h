@@ -25,6 +25,7 @@ typedef struct {
     // Default: WARN
     LogLevel log_level;
     // Default: 1
+    // TODO: Add this feature in the future
     int has_color;
     // Default: 1
     int has_date;
