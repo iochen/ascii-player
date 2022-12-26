@@ -54,13 +54,22 @@ $ asciiplayer <URI/PATH> --cache <PATH>
 ```
 ASCII Player v1.0.0
 A media player that plays video file in ASCII characters.
-Usage: asciiplayer <file> [-h | --help] [-l | --license] [--cache <file>]
-                          [-n | —no-audio]
+Usage: asciiplayer <file> [-h | --help] [-l | --license] [-c | --cache <file>]
+                          [-n | —no-audio] [-g | --grayscale <string>] [-r | --reverse]
+                          [--log <log file>] [--loglevel <level num>]
+
        --help -h            Print this help page
        --license -l         Show license and author info
        --cache -c <file>    Process video into a cached file
                             example: $ asciiplayer video.mp4 --cache cached.apcache
+       --grayscale -g <string>
+                            Grayscale string (default: " .:-=+*#%@")
+       --reverse -r         Reverse grayscale string
        --no-audio -n        Play video without playing audio
+       --log <log file>     Path to log file
+       --loglevel <level num>
+                            Log level number {TRACE: 0, DEBUG: 1, INFO: 2, WARN: 3,
+                                              ERROR: 4, FATAL: 5}
 ```
 
 ## License
