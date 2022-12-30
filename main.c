@@ -490,7 +490,7 @@ void handle_exit() {
 
 void print_help() {
     printf(
-        "ASCII Player v1.0.0\n\
+        "ASCII Player v1.0.2\n\
 A media player that plays video file in ASCII characters.\n\
 Usage: asciiplayer <file> [-h | --help] [-l | --license] [-c | --cache <file>]\n\
                           [-n | —no-audio] [-g | --grayscale <string>] [-r | --reverse]\n\

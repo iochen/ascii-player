@@ -52,7 +52,7 @@ $ asciiplayer <URI/PATH> --cache <PATH>
 ```
 ### Other options
 ```
-ASCII Player v1.0.0
+ASCII Player v1.0.2
 A media player that plays video file in ASCII characters.
 Usage: asciiplayer <file> [-h | --help] [-l | --license] [-c | --cache <file>]
                           [-n | —no-audio] [-g | --grayscale <string>] [-r | --reverse]
