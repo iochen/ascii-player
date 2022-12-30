@@ -44,9 +44,8 @@ int main(int argc, char *argv[]) {
     config conf = parse_config(argc, argv);
 
     // Initialize ncurses window
-    if (!ncurses_status) {
+    if (!atomic_fetch_or(&ncurses_status, 1)) {
         initscr();
-        ncurses_status = 1;
     }
     atexit(handle_exit);
 
@@ -67,18 +66,16 @@ int main(int argc, char *argv[]) {
 
     // If --help
     if (conf.help) {
-        if (ncurses_status) {
+        if (atomic_fetch_and(&ncurses_status, 0)) {
             endwin();
-            ncurses_status = 0;
         }
         print_help();
         return 0;
     }
     // If --license
     if (conf.license) {
-        if (ncurses_status) {
+        if (atomic_fetch_and(&ncurses_status, 0)) {
             endwin();
-            ncurses_status = 0;
         }
         print_license();
         return 0;
@@ -116,9 +113,8 @@ int main(int argc, char *argv[]) {
     AVRational framerate = fmt_ctxt->streams[v_idx]->avg_frame_rate;
     // Check if has FPS
     if (framerate.num == 0 && conf.no_audio) {
-        if (ncurses_status) {
+        if (atomic_fetch_and(&ncurses_status, 0)) {
             endwin();
-            ncurses_status = 0;
         }
         printf("Unknown FPS! Exiting...\n");
         lfatal(-1, "Unknown FPS");
@@ -130,9 +126,8 @@ int main(int argc, char *argv[]) {
     // Allocate AVPacket
     AVPacket *pckt = av_packet_alloc();
     if (!pckt) {
-        if (ncurses_status) {
+        if (atomic_fetch_and(&ncurses_status, 0)) {
             endwin();
-            ncurses_status = 0;
         }
         printf("Unable to allocate AVPacket\n");
         lfatal(-2, "Unable to allocate AVPacket");
@@ -140,20 +135,17 @@ int main(int argc, char *argv[]) {
     // Allocate AVFrame
     AVFrame *frame = av_frame_alloc();
     if (!frame) {
-        if (ncurses_status) {
+        if (atomic_fetch_and(&ncurses_status, 0)) {
             endwin();
-            ncurses_status = 0;
         }
         printf("Unable to allocate AVFrame\n");
         lfatal(-2, "Unable to allocate AVFrame");
     }
-
     // Allocate resized greyscale image frame
     AVFrame *frame_greyscale = av_frame_alloc();
     if (!frame_greyscale) {
-        if (ncurses_status) {
+        if (atomic_fetch_and(&ncurses_status, 0)) {
             endwin();
-            ncurses_status = 0;
         }
         printf("Unable to allocate AVFrame for greyscale frame\n");
         lfatal(-2, "Unable to allocate AVFrame for greyscale frame");
@@ -169,9 +161,8 @@ int main(int argc, char *argv[]) {
     // Allocate resampled audio frame
     AVFrame *frame_resampled = av_frame_alloc();
     if (!frame_resampled) {
-        if (ncurses_status) {
+        if (atomic_fetch_and(&ncurses_status, 0)) {
             endwin();
-            ncurses_status = 0;
         }
         printf("Unable to allocate AVFrame for audio frame\n");
         lfatal(-2, "Unable to allocate AVFrame for audio frame");
@@ -179,9 +170,8 @@ int main(int argc, char *argv[]) {
     // Allocate audio resample context
     SwrContext *resample_ctxt = swr_alloc();
     if (!resample_ctxt) {
-        if (ncurses_status) {
+        if (atomic_fetch_and(&ncurses_status, 0)) {
             endwin();
-            ncurses_status = 0;
         }
         printf("Unable to allocate AVAudioResampleContext\n");
         lfatal(-2, "Unable to allocate AVAudioResampleContext");
@@ -220,12 +210,11 @@ int main(int argc, char *argv[]) {
         err = Pa_OpenStream(&stream, NULL, &pa_stm_param, a_cdc->sample_rate,
                             AUDIO_BUF_SIZE, paClipOff, NULL, NULL);
         if (err != paNoError) {
-            if (ncurses_status) {
+            if (atomic_fetch_and(&ncurses_status, 0)) {
                 endwin();
-                ncurses_status = 0;
             }
             printf("Error when opening audio stream. (code %d)\n", err);
-            lfatal(-3, "Error when opening audio stream. (code %d)", err)
+            lfatal(-3, "Error when opening audio stream. (code %d)", err);
         }
     }
 
@@ -249,9 +238,8 @@ int main(int argc, char *argv[]) {
     if (conf.cache) {
         apc = apcache_alloc();
         if (!apc) {
-            if (ncurses_status) {
+            if (atomic_fetch_and(&ncurses_status, 0)) {
                 endwin();
-                ncurses_status = 0;
             }
             printf("Cannot allocate APCache\n");
             lfatal(-2, "Cannot allocate APCache");
@@ -263,9 +251,8 @@ int main(int argc, char *argv[]) {
         linfo("Opening cache file in w mode...");
         apc->file = fopen(conf.cache, "w");
         if ((err = apcache_create(apc)) != 0) {
-            if (ncurses_status) {
+            if (atomic_fetch_and(&ncurses_status, 0)) {
                 endwin();
-                ncurses_status = 0;
             }
             printf("Error when creating apcache file. (code: %d)\n", err);
             lfatal(-2, "Error when creating apcache file. (code: %d)", err);
@@ -282,9 +269,8 @@ int main(int argc, char *argv[]) {
             // Send packet to video decoder
             err = avcodec_send_packet(v_cdc, pckt);
             if (err < 0) {
-                if (ncurses_status) {
+                if (atomic_fetch_and(&ncurses_status, 0)) {
                     endwin();
-                    ncurses_status = 0;
                 }
                 printf(
                     "Error when supplying raw packet data as input to video "
@@ -303,9 +289,8 @@ int main(int argc, char *argv[]) {
                     if (err == AVERROR(EAGAIN) || err == AVERROR_EOF) {
                         break;
                     }
-                    if (ncurses_status) {
+                    if (atomic_fetch_and(&ncurses_status, 0)) {
                         endwin();
-                        ncurses_status = 0;
                     }
                     printf("Failed when decoding video. (code: %d)\n", err);
                     lfatal(-10, "Failed when decoding video. (code: %d)", err);
@@ -329,9 +314,8 @@ int main(int argc, char *argv[]) {
                     apf.bsize = buf_size;
                     apf.data = buf;
                     if ((err = apcache_write_frame(apc, &apf)) != 0) {
-                        if (ncurses_status) {
+                        if (atomic_fetch_and(&ncurses_status, 0)) {
                             endwin();
-                            ncurses_status = 0;
                         }
                         printf(
                             "Error when writing video frame to cache file. "
@@ -361,9 +345,8 @@ int main(int argc, char *argv[]) {
             // Send packet to audio decoder
             err = avcodec_send_packet(a_cdc, pckt);
             if (err < 0) {
-                if (ncurses_status) {
+                if (atomic_fetch_and(&ncurses_status, 0)) {
                     endwin();
-                    ncurses_status = 0;
                 }
                 printf(
                     "Error when supplying raw packet data as input to audio "
@@ -382,9 +365,8 @@ int main(int argc, char *argv[]) {
                     if (err == AVERROR(EAGAIN) || err == AVERROR_EOF) {
                         break;
                     }
-                    if (ncurses_status) {
+                    if (atomic_fetch_and(&ncurses_status, 0)) {
                         endwin();
-                        ncurses_status = 0;
                     }
                     printf("Failed when decoding audio. (code: %d)\n", err);
                     lfatal(-10, "Failed when decoding audio. (code: %d)", err);
@@ -401,9 +383,8 @@ int main(int argc, char *argv[]) {
                 // Resample audio data
                 err = swr_convert_frame(resample_ctxt, frame_resampled, frame);
                 if (err != 0) {
-                    if (ncurses_status) {
+                    if (atomic_fetch_and(&ncurses_status, 0)) {
                         endwin();
-                        ncurses_status = 0;
                     }
                     print_averror(err);
                     lfatal(-10, "Error when resampling audio data. (code: %d)",
@@ -419,9 +400,8 @@ int main(int argc, char *argv[]) {
                     apf.bsize = frame_resampled->nb_samples * 2 * sizeof(float);
                     apf.data = frame_resampled->data[0];
                     if ((err = apcache_write_frame(apc, &apf)) != 0) {
-                        if (ncurses_status) {
+                        if (atomic_fetch_and(&ncurses_status, 0)) {
                             endwin();
-                            ncurses_status = 0;
                         }
                         printf(
                             "Error when writing audio frame to cache file. "
@@ -455,9 +435,8 @@ int main(int argc, char *argv[]) {
     pthread_mutex_unlock(&conf.video_ch_status.lock);
 
     // Exit ncurses mode
-    if (ncurses_status) {
+    if (atomic_fetch_and(&ncurses_status, 0)) {
         endwin();
-        ncurses_status = 0;
     }
     // Free decode frame
     av_frame_free(&frame);
@@ -495,9 +474,8 @@ int main(int argc, char *argv[]) {
 /// @param _
 void handle_int(int _) {
     // Exit ncurses mode
-    if (ncurses_status) {
+    if (atomic_fetch_and(&ncurses_status, 0)) {
         endwin();
-        ncurses_status = 0;
     }
     // Exit program
     exit(0);
@@ -505,9 +483,8 @@ void handle_int(int _) {
 
 void handle_exit() {
     // Exit ncurses mode
-    if (ncurses_status) {
+    if (atomic_fetch_and(&ncurses_status, 0)) {
         endwin();
-        ncurses_status = 0;
     }
 }
 

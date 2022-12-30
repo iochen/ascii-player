@@ -143,9 +143,8 @@ int play_from_cache(config conf) {
     int err;
     linfo("Trying to open the apcache file (path: %s)", conf.filename);
     if ((err = apcache_open(conf.filename, &apc)) != 0) {
-        if (ncurses_status) {
+        if (atomic_fetch_and(&ncurses_status, 0)) {
             endwin();
-            ncurses_status = 0;
         }
         printf("Error when opening apcache file. (code: %d)\n", err);
         lfatal(-1, "Error when opening apcache file. (code: %d)\n", err);
@@ -158,9 +157,8 @@ int play_from_cache(config conf) {
     conf.height = apc->height;
 
     if (conf.fps == 0 && conf.no_audio) {
-        if (ncurses_status) {
+        if (atomic_fetch_and(&ncurses_status, 0)) {
             endwin();
-            ncurses_status = 0;
         }
         printf("Unknown FPS! Exiting...\n");
         lfatal(-1, "Unknown FPS");
@@ -177,9 +175,8 @@ int play_from_cache(config conf) {
         // Initialize PortAudio
         err = Pa_Initialize();
         if (err != paNoError) {
-            if (ncurses_status) {
+            if (atomic_fetch_and(&ncurses_status, 0)) {
                 endwin();
-                ncurses_status = 0;
             }
             printf("PortAudio init error(code: %d).\n", err);
             lfatal(-1, "PortAudio init error(code: %d).", err);
@@ -249,9 +246,8 @@ int play_from_cache(config conf) {
         pthread_cond_wait(&conf.video_ch_status.drain_cond,
                           &conf.video_ch_status.lock);
     pthread_mutex_unlock(&conf.video_ch_status.lock);
-    if (ncurses_status) {
+    if (atomic_fetch_and(&ncurses_status, 0)) {
         endwin();
-        ncurses_status = 0;
     }
     // Free video channel
     free_channel(conf.video_ch);
